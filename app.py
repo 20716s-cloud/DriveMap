@@ -3,26 +3,26 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="DriveMap | GPS Drive",
+    page_title="DriveMap | Virtual Drive",
     page_icon="🚗",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-    .block-container {
-        max-width: 1200px;
-        padding-top: 2rem;
-    }
+.block-container {
+    max-width: 1200px;
+    padding-top: 1.5rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🚗 DriveMap")
-st.caption("REAL GPS TRACKING · YOUR JOURNEY")
+st.caption("VIRTUAL DRIVE  /  MAP EXPLORATION")
 
-st.info(
-    "휴대폰에서 위치 권한을 허용하면 현재 위치와 이동 경로를 "
-    "지도에 표시합니다. 처음에는 정차 상태에서 테스트하세요."
+st.write(
+    "키보드 방향키 또는 WASD 키로 자동차를 움직이세요. "
+    "지도 안을 클릭한 뒤 키보드를 사용하면 됩니다."
 )
 
 html_code = r"""
@@ -32,150 +32,234 @@ html_code = r"""
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link
- rel="stylesheet"
- href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
+    color: #f4f7fb;
+    background: #0c1119;
     font-family: Arial, sans-serif;
-    background: #10151d;
-    color: white;
 }
 
-.panel {
+.dashboard {
+    background: #151d29;
+    border: 1px solid #29384a;
+    border-radius: 15px;
     padding: 16px;
-    background: #171f2b;
-    border: 1px solid #2d394a;
-    border-radius: 14px;
     margin-bottom: 12px;
+}
+
+.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.tag {
+    color: #4ee0ae;
+    font-size: 12px;
+    letter-spacing: 1px;
+    font-weight: bold;
 }
 
 .stats {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
+}
+
+.stat {
+    background: #0d141e;
+    padding: 12px;
+    border-radius: 10px;
 }
 
 .label {
     font-size: 12px;
-    color: #9eafc3;
-    margin-bottom: 8px;
+    color: #9baec4;
+    margin-bottom: 7px;
 }
 
 .value {
-    font-size: clamp(16px, 4vw, 24px);
+    font-size: clamp(18px, 3.5vw, 27px);
     font-weight: bold;
-    overflow-wrap: anywhere;
 }
 
 .unit {
-    font-size: 12px;
-    color: #9eafc3;
+    font-size: 11px;
+    color: #9baec4;
 }
 
 #map {
     width: 100%;
-    height: 420px;
-    border-radius: 14px;
-    border: 1px solid #2d394a;
+    height: 450px;
+    border-radius: 15px;
+    border: 1px solid #29384a;
+    outline: none;
 }
 
-.buttons {
-    display: flex;
-    gap: 8px;
+#map:focus {
+    border-color: #4ee0ae;
+}
+
+.controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     margin-top: 12px;
+}
+
+.pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 52px);
+    gap: 7px;
 }
 
 button {
-    flex: 1;
-    padding: 13px 8px;
-    border: 0;
-    border-radius: 9px;
-    font-size: 14px;
-    font-weight: bold;
     cursor: pointer;
-}
-
-#start {
-    background: #49dfac;
-    color: #10251f;
-}
-
-#stop, #reset {
-    background: #293647;
+    border: 1px solid #35455a;
+    background: #202c3c;
     color: white;
+    font-size: 17px;
+    border-radius: 10px;
+    font-weight: bold;
+    touch-action: manipulation;
 }
+
+button:hover {
+    background: #30445a;
+}
+
+button:active {
+    background: #356c66;
+    transform: scale(.97);
+}
+
+.up { grid-column: 2; grid-row: 1; }
+.left { grid-column: 1; grid-row: 2; }
+.down { grid-column: 2; grid-row: 2; }
+.right { grid-column: 3; grid-row: 2; }
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.actions button {
+    min-height: 43px;
+    font-size: 13px;
+}
+
+.primary {
+    color: #08251d;
+    background: #4ee0ae;
+    border: none;
+}
+
+.primary:hover { background: #75f0c5; }
 
 #status {
-    font-size: 13px;
+    color: #a8bacd;
+    font-size: 12px;
     line-height: 1.6;
-    color: #aabbd0;
-    margin-top: 12px;
+    margin-top: 13px;
 }
 
-.car-icon {
+.car {
     font-size: 30px;
     line-height: 36px;
     text-align: center;
-    filter: drop-shadow(0 2px 3px #0008);
+    filter: drop-shadow(0 2px 3px #0009);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 560px) {
     #map { height: 380px; }
-    .panel { padding: 12px; }
+    .controls { grid-template-columns: 1fr; }
+    .stats { gap: 5px; }
+    .stat { padding: 9px; }
 }
 </style>
 </head>
 
 <body>
-<div class="panel">
-    <div class="stats">
+<div class="dashboard">
+    <div class="top">
         <div>
-            <div class="label">주행 거리</div>
-            <div class="value"><span id="distance">0.00</span>
-                <span class="unit">km</span>
+            <div class="tag">DRIVEMAP ARCADE</div>
+            <div style="font-size:22px;font-weight:bold;margin-top:5px">
+                Free Drive
             </div>
         </div>
-
-        <div>
-            <div class="label">주행 시간</div>
-            <div class="value" id="duration">00:00</div>
-        </div>
-
-        <div>
-            <div class="label">GPS 정확도</div>
-            <div class="value" id="accuracy">--</div>
-            <div class="unit">미터</div>
+        <div style="font-size:12px;color:#9baec4">
+            VIRTUAL MODE · GPS NOT REQUIRED
         </div>
     </div>
 
-    <div class="buttons">
-        <button id="start">▶ 주행 시작</button>
-        <button id="stop">■ 주행 종료</button>
-        <button id="reset">↻ 초기화</button>
-    </div>
-
-    <div id="status">
-        준비 완료 · 주행 시작을 누르면 GPS 권한을 요청합니다.
+    <div class="stats">
+        <div class="stat">
+            <div class="label">DISTANCE</div>
+            <div class="value">
+                <span id="distance">0</span>
+                <span class="unit">m</span>
+            </div>
+        </div>
+        <div class="stat">
+            <div class="label">DRIVE TIME</div>
+            <div class="value" id="time">00:00</div>
+        </div>
+        <div class="stat">
+            <div class="label">SCORE</div>
+            <div class="value" id="score">0</div>
+            <div class="unit">POINTS</div>
+        </div>
     </div>
 </div>
 
-<div id="map"></div>
+<div id="map" tabindex="0"
+     aria-label="가상 주행 지도. 클릭한 후 방향키로 이동하세요."></div>
+
+<div class="controls">
+    <div class="dashboard">
+        <div class="label">DRIVING CONTROLS</div>
+        <div class="pad">
+            <button class="up" data-move="up" aria-label="위로 이동">▲</button>
+            <button class="left" data-move="left" aria-label="왼쪽 이동">◀</button>
+            <button class="down" data-move="down" aria-label="아래로 이동">▼</button>
+            <button class="right" data-move="right" aria-label="오른쪽 이동">▶</button>
+        </div>
+        <div id="status">
+            READY · 지도를 클릭하고 방향키 또는 WASD를 눌러 보세요.
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="label">GAME OPTIONS</div>
+        <div class="actions">
+            <button id="center">◎ 자동차 위치로 이동</button>
+            <button id="reset" class="primary">↻ 새 주행 시작</button>
+        </div>
+        <div style="font-size:12px;color:#9baec4;line-height:1.6;margin-top:12px">
+            한 번 누를 때마다 자동차가 이동합니다.
+            지나온 경로는 파란색 선으로 기록됩니다.
+        </div>
+    </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-const statusEl = document.getElementById("status");
-const distanceEl = document.getElementById("distance");
-const durationEl = document.getElementById("duration");
-const accuracyEl = document.getElementById("accuracy");
-
-const map = L.map("map").setView([36.5, 127.8], 7);
+const map = L.map("map", {
+    zoomControl: true
+}).setView([37.5665, 126.9780], 17);
 
 L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -185,224 +269,183 @@ L.tileLayer(
     }
 ).addTo(map);
 
+// 가상 주행 시작 위치: 서울 시내의 지도 좌표
+const initial = L.latLng(37.5665, 126.9780);
+let pos = L.latLng(initial.lat, initial.lng);
+let path = [[pos.lat, pos.lng]];
+let distance = 0;
+let score = 0;
+let moves = 0;
+let startTime = null;
+let timer = null;
+let heading = 0;
+
+// 자동차 아이콘
 const carIcon = L.divIcon({
-    className: "car-icon",
-    html: "🚗",
+    className: "car",
+    html: '<span id="car-emoji" style="display:block">🚗</span>',
     iconSize: [38, 38],
     iconAnchor: [19, 19]
 });
 
-let carMarker = null;
-let routeLine = L.polyline([], {
-    color: "#16a5ff",
+const car = L.marker(pos, {
+    icon: carIcon,
+    keyboard: false
+}).addTo(map);
+
+const route = L.polyline(path, {
+    color: "#168cff",
     weight: 5,
     opacity: 0.9
 }).addTo(map);
 
-let routePoints = [];
-let watchId = null;
-let startedAt = null;
-let elapsedBeforePause = 0;
-let timerId = null;
-let lastPoint = null;
-let totalMeters = 0;
-let tracking = false;
+const distanceEl = document.getElementById("distance");
+const scoreEl = document.getElementById("score");
+const timeEl = document.getElementById("time");
+const statusEl = document.getElementById("status");
 
-function distanceBetween(a, b) {
-    const R = 6371000;
-    const rad = x => x * Math.PI / 180;
-
-    const dLat = rad(b.lat - a.lat);
-    const dLon = rad(b.lng - a.lng);
-
-    const x =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(rad(a.lat)) *
-        Math.cos(rad(b.lat)) *
-        Math.sin(dLon / 2) ** 2;
-
-    return 2 * R * Math.atan2(
-        Math.sqrt(x),
-        Math.sqrt(1 - x)
-    );
+function updateDashboard() {
+    distanceEl.textContent = Math.round(distance);
+    scoreEl.textContent = score;
 }
 
-function formatTime(seconds) {
+function updateTime() {
+    if (!startTime) return;
+
+    const seconds = Math.floor((Date.now() - startTime) / 1000);
     const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const hours = Math.floor(mins / 60);
+    const secs = seconds % 60;
 
-    if (hours > 0) {
-        return String(hours).padStart(2, "0") + ":" +
-            String(mins % 60).padStart(2, "0") + ":" +
-            String(secs).padStart(2, "0");
-    }
-
-    return String(mins).padStart(2, "0") + ":" +
+    timeEl.textContent =
+        String(mins).padStart(2, "0") + ":" +
         String(secs).padStart(2, "0");
 }
 
-function updateTimer() {
-    const elapsed = elapsedBeforePause +
-        (startedAt ? (Date.now() - startedAt) / 1000 : 0);
+function move(direction) {
+    if (moves === 0) {
+        startTime = Date.now();
+        timer = setInterval(updateTime, 1000);
+    }
 
-    durationEl.textContent = formatTime(elapsed);
+    // 지도 좌표를 기준으로 약 15m씩 이동
+    const meters = 15;
+    const latScale = 111320;
+    const lngScale = 111320 *
+        Math.cos(pos.lat * Math.PI / 180);
+
+    let dLat = 0;
+    let dLng = 0;
+
+    if (direction === "up") {
+        dLat = meters / latScale;
+        heading = 0;
+    } else if (direction === "down") {
+        dLat = -meters / latScale;
+        heading = 180;
+    } else if (direction === "left") {
+        dLng = -meters / lngScale;
+        heading = 270;
+    } else if (direction === "right") {
+        dLng = meters / lngScale;
+        heading = 90;
+    }
+
+    pos = L.latLng(pos.lat + dLat, pos.lng + dLng);
+
+    // 자동차 아이콘 방향 변경
+    const emoji = document.getElementById("car-emoji");
+    if (emoji) {
+        emoji.style.transform = "rotate(" + heading + "deg)";
+    }
+
+    // 경로 누적 및 화면 갱신
+    path.push([pos.lat, pos.lng]);
+    route.setLatLngs(path);
+    car.setLatLng(pos);
+
+    distance += meters;
+    score += 10;
+    moves += 1;
+
+    updateDashboard();
+
+    statusEl.textContent =
+        "DRIVING · 이동 " + moves +
+        "회 · 누적 경로 " + path.length + "개 지점";
+
+    // 자동차가 지도 화면 안에서 보이도록 이동
+    map.panTo(pos, { animate: true, duration: 0.15 });
 }
 
-function onPosition(position) {
-    if (!tracking) return;
+document.querySelectorAll("[data-move]").forEach(button => {
+    button.addEventListener("click", () => {
+        move(button.dataset.move);
+        document.getElementById("map").focus();
+    });
+});
 
-    const coords = position.coords;
+// 키보드: 방향키 또는 WASD
+document.addEventListener("keydown", event => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
 
-    const point = {
-        lat: coords.latitude,
-        lng: coords.longitude
+    const key = event.key.toLowerCase();
+
+    const keys = {
+        arrowup: "up",
+        w: "up",
+        arrowdown: "down",
+        s: "down",
+        arrowleft: "left",
+        a: "left",
+        arrowright: "right",
+        d: "right"
     };
 
-    accuracyEl.textContent = Math.round(coords.accuracy);
-
-    if (coords.accuracy > 50) {
-        statusEl.textContent =
-            "GPS 정확도가 낮습니다. 더 정확한 위치를 기다리고 있어요.";
-        return;
+    if (keys[key]) {
+        event.preventDefault();
+        move(keys[key]);
     }
+});
 
-    if (lastPoint) {
-        const segment = distanceBetween(lastPoint, point);
+document.getElementById("center").addEventListener("click", () => {
+    map.setView(pos, 17);
+    statusEl.textContent = "자동차 위치를 지도 중앙에 표시했습니다.";
+});
 
-        // GPS 오차로 인한 작은 흔들림을 줄입니다.
-        if (segment < 3) return;
+document.getElementById("reset").addEventListener("click", () => {
+    if (timer) clearInterval(timer);
 
-        // 큰 GPS 점프는 자동으로 경로에 추가하지 않습니다.
-        if (segment > 500) {
-            statusEl.textContent =
-                "위치가 크게 변경되어 해당 지점을 건너뛰었습니다.";
-            return;
-        }
+    pos = L.latLng(initial.lat, initial.lng);
+    path = [[pos.lat, pos.lng]];
+    distance = 0;
+    score = 0;
+    moves = 0;
+    startTime = null;
+    timer = null;
+    heading = 0;
 
-        totalMeters += segment;
-    }
+    car.setLatLng(pos);
+    route.setLatLngs(path);
 
-    lastPoint = point;
-    routePoints.push([point.lat, point.lng]);
+    const emoji = document.getElementById("car-emoji");
+    if (emoji) emoji.style.transform = "rotate(0deg)";
 
-    if (!carMarker) {
-        carMarker = L.marker(point, { icon: carIcon }).addTo(map);
-        map.setView(point, 16);
-    } else {
-        carMarker.setLatLng(point);
-    }
+    distanceEl.textContent = "0";
+    scoreEl.textContent = "0";
+    timeEl.textContent = "00:00";
 
-    routeLine.setLatLngs(routePoints);
-
-    distanceEl.textContent = (totalMeters / 1000).toFixed(2);
-
-    // 처음에는 현재 위치를 따라가고,
-    // 사용자가 지도를 움직이면 자동 이동을 멈춥니다.
-    if (routePoints.length === 1) {
-        map.setView(point, 16);
-    }
-
+    map.setView(pos, 17);
     statusEl.textContent =
-        "GPS 추적 중 · 위치 정확도 약 " +
-        Math.round(coords.accuracy) + "m";
-}
-
-function onGpsError(error) {
-    const messages = {
-        1: "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요.",
-        2: "현재 위치를 확인할 수 없습니다. GPS를 확인해 주세요.",
-        3: "GPS 응답 시간이 초과되었습니다. 다시 시도해 주세요."
-    };
-
-    statusEl.textContent =
-        messages[error.code] || "GPS를 사용할 수 없습니다.";
-}
-
-document.getElementById("start").onclick = function () {
-    if (!navigator.geolocation) {
-        statusEl.textContent =
-            "이 브라우저는 GPS 위치 기능을 지원하지 않습니다.";
-        return;
-    }
-
-    if (tracking) return;
-
-    tracking = true;
-    startedAt = Date.now();
-
-    statusEl.textContent = "위치 권한을 확인하고 있습니다.";
-
-    watchId = navigator.geolocation.watchPosition(
-        onPosition,
-        onGpsError,
-        {
-            enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 20000
-        }
-    );
-
-    timerId = setInterval(updateTimer, 1000);
-};
-
-document.getElementById("stop").onclick = function () {
-    if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-    }
-
-    if (startedAt) {
-        elapsedBeforePause += (Date.now() - startedAt) / 1000;
-        startedAt = null;
-    }
-
-    tracking = false;
-
-    if (timerId) {
-        clearInterval(timerId);
-        timerId = null;
-    }
-
-    updateTimer();
-    statusEl.textContent =
-        "주행 추적을 종료했습니다. 기록은 현재 화면에만 남아 있습니다.";
-};
-
-document.getElementById("reset").onclick = function () {
-    if (tracking) {
-        statusEl.textContent = "초기화하려면 먼저 주행을 종료하세요.";
-        return;
-    }
-
-    routePoints = [];
-    lastPoint = null;
-    totalMeters = 0;
-    elapsedBeforePause = 0;
-    startedAt = null;
-
-    distanceEl.textContent = "0.00";
-    durationEl.textContent = "00:00";
-    accuracyEl.textContent = "--";
-
-    routeLine.setLatLngs([]);
-
-    if (carMarker) {
-        map.removeLayer(carMarker);
-        carMarker = null;
-    }
-
-    map.setView([36.5, 127.8], 7);
-    statusEl.textContent = "새 주행을 시작할 준비가 되었습니다.";
-};
+        "READY · 새 주행을 시작하세요.";
+});
 </script>
 </body>
 </html>
 """
 
-components.html(html_code, height=660, scrolling=False)
+components.html(html_code, height=720, scrolling=False)
 
 st.caption(
-    "DriveMap 초기 GPS 버전 · 위치 권한이 필요합니다. "
-    "주행 기록은 현재 화면에만 저장되며 새로고침하면 사라집니다."
+    "DriveMap Virtual Drive · 가상 주행 거리는 게임용 값이며 "
+    "실제 이동 거리나 실제 도로 경로를 의미하지 않습니다."
 )
