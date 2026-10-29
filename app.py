@@ -8,588 +8,767 @@ import folium
 from streamlit_folium import st_folium
 
 st.set_page_config(
-    page_title="DriveMap",
-    page_icon="🚘",
+    page_title="DriveMap | Kart Drive",
+    page_icon="🏎️",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-.stApp {background:#090d13;color:#eef3f8}
-section[data-testid="stSidebar"] {background:#101722}
-div[data-testid="stMetric"] {
- background:#141c27;border:1px solid #273546;
- border-radius:12px;padding:12px
+.stApp {
+    background: #0b0e13;
+    color: #f4f6fa;
+}
+[data-testid="stSidebar"] {
+    background: #121720;
+}
+h1, h2, h3, p, label {
+    color: #f4f6fa;
+}
+div.stButton > button {
+    background: #e7ff4f;
+    color: #111;
+    border: none;
+    border-radius: 10px;
+    font-weight: 800;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚘 DriveMap")
-st.caption("Kakao Roadview Driving Simulator")
+st.title("🏎️ DriveMap")
+st.caption("PLAN YOUR ROUTE · START YOUR ENGINE")
 
-with st.sidebar:
-    st.subheader("경로 설정")
-    origin = st.text_input("출발지", "수원역")
-    destination = st.text_input("목적지", "광교호수공원")
+# -------------------------------
+# 실제 출발지 / 도착지 검색
+# -------------------------------
 
-    st.subheader("차량 설정")
-    efficiency = st.number_input(
-        "연비 (km/L)", min_value=1.0,
-        max_value=60.0, value=12.0
-    )
-    starting_fuel = st.number_input(
-        "시작 연료 (L)", min_value=0.0,
-        max_value=200.0, value=35.0
-    )
-    fuel_price = st.number_input(
-        "연료 가격 (원/L)", min_value=500,
-        max_value=5000, value=1700
-    )
-
-    search = st.button(
-        "경로 검색", type="primary",
-        use_container_width=True
-    )
-
-
-@st.cache_data(ttl=3600)
 def geocode(place):
+    url = "https://nominatim.openstreetmap.org/search"
     response = requests.get(
-        "https://nominatim.openstreetmap.org/search",
-        params={
-            "q": place + ", South Korea",
-            "format": "jsonv2",
-            "limit": 1
-        },
+        url,
+        params={"q": place, "format": "jsonv2", "limit": 1},
         headers={"User-Agent": "DriveMapStudentProject/1.0"},
-        timeout=20
+        timeout=15
     )
     response.raise_for_status()
     results = response.json()
 
     if not results:
-        raise ValueError(f"장소를 찾지 못했습니다: {place}")
+        return None
 
-    return {
-        "lat": float(results[0]["lat"]),
-        "lon": float(results[0]["lon"]),
-        "name": results[0]["display_name"]
-    }
+    return [
+        float(results[0]["lat"]),
+        float(results[0]["lon"]),
+        results[0]["display_name"]
+    ]
 
 
-@st.cache_data(ttl=900)
-def get_route(lon1, lat1, lon2, lat2):
+def get_route(start, end):
     url = (
         "https://router.project-osrm.org/route/v1/driving/"
-        f"{lon1},{lat1};{lon2},{lat2}"
+        f"{start[1]},{start[0]};{end[1]},{end[0]}"
     )
     response = requests.get(
         url,
         params={
             "overview": "full",
-            "geometries": "geojson"
+            "geometries": "geojson",
+            "steps": "false"
         },
-        timeout=30
+        timeout=25
     )
     response.raise_for_status()
-    result = response.json()
+    data = response.json()
 
-    if result.get("code") != "Ok" or not result.get("routes"):
-        raise ValueError("운전 경로를 찾지 못했습니다.")
+    if data.get("code") != "Ok" or not data.get("routes"):
+        return None
 
-    route = result["routes"][0]
-
-    return {
-        "distance_m": route["distance"],
-        "duration_s": route["duration"],
-        "coordinates": route["geometry"]["coordinates"]
-    }
-
-
-if "drive_data" not in st.session_state:
-    st.session_state.drive_data = None
-
-if search:
-    try:
-        if not origin.strip() or not destination.strip():
-            raise ValueError("출발지와 목적지를 입력하세요.")
-
-        with st.spinner("경로를 검색하고 있습니다..."):
-            start = geocode(origin.strip())
-            end = geocode(destination.strip())
-            route = get_route(
-                start["lon"], start["lat"],
-                end["lon"], end["lat"]
-            )
-
-        st.session_state.drive_data = {
-            "start": start,
-            "end": end,
-            "route": route,
-            "origin": origin.strip(),
-            "destination": destination.strip()
-        }
-
-    except Exception as e:
-        st.error(f"경로 검색 실패: {e}")
-
-
-data = st.session_state.drive_data
-
-if data:
-    start = data["start"]
-    end = data["end"]
-    route = data["route"]
-
-    distance_km = route["distance_m"] / 1000
-    duration_min = route["duration_s"] / 60
-    fuel_estimate = distance_km / efficiency
-    cost_estimate = fuel_estimate * fuel_price
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("도로 거리", f"{distance_km:.1f} km")
-    c2.metric("기본 예상 시간", f"{duration_min:.0f}분")
-    c3.metric("예상 연료", f"{fuel_estimate:.2f} L")
-    c4.metric("예상 연료비", f"{cost_estimate:,.0f}원")
-
-    try:
-        kakao_key = st.secrets["KAKAO_MAPS_API_KEY"]
-    except Exception:
-        kakao_key = ""
-
-    if not kakao_key:
-        st.warning(
-            "카카오 JavaScript 키가 설정되지 않았습니다. "
-            "Streamlit Settings → Secrets에 "
-            "KAKAO_MAPS_API_KEY를 설정하세요."
-        )
-
-    st.subheader("1인칭 카카오 로드뷰 운전")
-    st.caption(
-        "W/↑ 가속 · S/↓ 또는 Space 브레이크 · "
-        "A/← 왼쪽 · D/→ 오른쪽"
-    )
-
-    # 경로 좌표를 브라우저로 전달
-    coords_json = json.dumps(route["coordinates"])
-    config_json = json.dumps({
-        "distanceKm": distance_km,
-        "durationMin": duration_min,
-        "efficiency": efficiency,
-        "fuelLiters": starting_fuel,
-        "fuelPrice": fuel_price
-    })
-
-    key_json = json.dumps(kakao_key)
-
-    game_html = r"""
-<div id="driveGame" style="
-    background:#0a0f16;color:white;
-    font-family:Arial,sans-serif;
-    border-radius:14px;overflow:hidden;
-">
-  <div style="height:500px;position:relative;background:#111">
-    <div id="roadview" style="height:100%;width:100%"></div>
-
-    <div id="loading" style="
-      position:absolute;top:50%;left:50%;
-      transform:translate(-50%,-50%);
-      background:#101722eF;padding:14px;
-      border-radius:10px;z-index:5;
-    ">카카오 로드뷰를 불러오는 중...</div>
-
-    <div style="
-      position:absolute;top:12px;left:12px;
-      z-index:3;pointer-events:none;
-      background:#101722e8;padding:10px;
-      border-radius:10px;font-size:13px;
-    ">
-      <b>DRIVEMAP</b><br>
-      <span id="status">준비 중</span>
-    </div>
-
-    <div style="
-      position:absolute;top:12px;right:12px;
-      z-index:3;pointer-events:none;
-      background:#101722e8;padding:10px;
-      border-radius:10px;text-align:right;
-    ">
-      속도 <b><span id="speed">0</span> km/h</b><br>
-      연료 <b><span id="fuel">--</span> L</b>
-    </div>
-
-    <!-- 화면 위에 표시하는 가상 맞은편 차량 -->
-    <div style="
-      position:absolute;inset:0;overflow:hidden;
-      pointer-events:none;z-index:2;
-    ">
-      <div class="traffic car1">🚙</div>
-      <div class="traffic car2">🚗</div>
-      <div class="traffic car3">🚐</div>
-    </div>
-
-    <div style="
-      position:absolute;bottom:12px;left:12px;right:12px;
-      z-index:3;display:flex;justify-content:space-between;
-      pointer-events:none;gap:8px;
-    ">
-      <div class="info">
-        남은 거리<br><b id="remaining">--</b>
-      </div>
-      <div class="info">
-        예상 연료비<br><b id="cost">--</b>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    .info {
-      background:#101722eF;padding:8px 12px;
-      border-radius:9px;font-size:12px;
-    }
-    .traffic {
-      position:absolute;left:54%;bottom:25%;
-      font-size:34px;opacity:0;
-      filter:drop-shadow(0 3px 3px #0008);
-    }
-    .car1 {animation:pass 9s linear infinite}
-    .car2 {animation:pass 12s linear 3s infinite}
-    .car3 {animation:pass 15s linear 6s infinite}
-    @keyframes pass {
-      0% {left:53%;bottom:43%;opacity:0;transform:scale(.3)}
-      15% {opacity:1}
-      80% {opacity:1}
-      100% {left:70%;bottom:5%;opacity:0;transform:scale(1.8)}
-    }
-    .driveButton {
-      background:#172332;color:white;
-      border:1px solid #34485f;
-      border-radius:10px;height:48px;
-      padding:0 14px;min-width:55px;
-      touch-action:none;
-    }
-  </style>
-
-  <div style="
-    background:#0e141d;padding:12px;
-    display:flex;justify-content:center;
-    gap:8px;flex-wrap:wrap;
-  ">
-    <button class="driveButton" data-key="ArrowLeft">◀</button>
-    <button class="driveButton" data-key="ArrowDown">브레이크</button>
-    <button class="driveButton" data-key="ArrowUp"
-      style="background:#0878c8">▲ 가속</button>
-    <button class="driveButton" data-key="ArrowRight">▶</button>
-    <button class="driveButton" id="reset">다시 시작</button>
-  </div>
-
-  <div style="
-    background:#0e141d;color:#aab8c8;
-    padding:0 12px 12px;font-size:12px;
-  ">
-    키보드를 사용하려면 운전 화면을 한 번 클릭하세요.
-  </div>
-</div>
-
-<script>
-(() => {
-  const KEY = KAKAO_KEY_DATA;
-  const coords = ROUTE_DATA;
-  const cfg = CONFIG_DATA;
-  const $ = id => document.getElementById(id);
-
-  let roadview = null;
-  let roadviewClient = null;
-  let speed = 0;
-  let progress = 0;
-  let fuel = cfg.fuelLiters;
-  let keys = {};
-  let last = performance.now();
-  let headingOffset = 0;
-  let lastUpdate = 0;
-  let currentSegment = -1;
-  let pending = false;
-
-  const rad = d => d * Math.PI / 180;
-
-  function distance(a, b) {
-    const R = 6371000;
-    const dLat = rad(b[1] - a[1]);
-    const dLon = rad(b[0] - a[0]);
-    const v = Math.sin(dLat / 2) ** 2
-      + Math.cos(rad(a[1])) * Math.cos(rad(b[1]))
-      * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(v));
-  }
-
-  function bearing(a, b) {
-    const p1 = rad(a[1]), p2 = rad(b[1]);
-    const dl = rad(b[0] - a[0]);
-    const y = Math.sin(dl) * Math.cos(p2);
-    const x = Math.cos(p1) * Math.sin(p2)
-      - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-  }
-
-  const cumulative = [0];
-  for (let i = 1; i < coords.length; i++) {
-    cumulative.push(
-      cumulative[i - 1] + distance(coords[i - 1], coords[i])
-    );
-  }
-  const totalMeters = cumulative[cumulative.length - 1];
-
-  function pointAt(meters) {
-    let i = 0;
-    while (
-      i < cumulative.length - 2 &&
-      cumulative[i + 1] < meters
-    ) i++;
-
-    const span = cumulative[i + 1] - cumulative[i];
-    const t = span > 0
-      ? (meters - cumulative[i]) / span : 0;
+    route = data["routes"][0]
 
     return {
-      i,
-      lat: coords[i][1] + (coords[i + 1][1] - coords[i][1]) * t,
-      lng: coords[i][0] + (coords[i + 1][0] - coords[i][0]) * t,
-      heading: bearing(coords[i], coords[i + 1])
-    };
-  }
-
-  function updateRoad(force = false) {
-    if (!roadview || pending || progress >= 1) return;
-
-    const loc = pointAt(progress * totalMeters);
-    const now = performance.now();
-
-    // 일정 거리마다 가장 가까운 카카오 로드뷰 지점을 검색
-    if (!force && loc.i === currentSegment) {
-      roadview.setViewpoint({
-        pan: (loc.heading + headingOffset + 360) % 360,
-        tilt: 0,
-        zoom: 0
-      });
-      return;
+        "distance_km": route["distance"] / 1000,
+        "duration_min": route["duration"] / 60,
+        "coordinates": [
+            [point[1], point[0]]
+            for point in route["geometry"]["coordinates"]
+        ]
     }
 
-    if (!force && now - lastUpdate < 1800) return;
 
-    currentSegment = loc.i;
-    lastUpdate = now;
-    pending = true;
-
-    const position = new kakao.maps.LatLng(loc.lat, loc.lng);
-
-    roadviewClient.getNearestPanoId(
-      position, 100,
-      function(panoId) {
-        pending = false;
-
-        if (panoId) {
-          roadview.setPanoId(panoId, position);
-          roadview.setViewpoint({
-            pan: (loc.heading + headingOffset + 360) % 360,
-            tilt: 0,
-            zoom: 0
-          });
-          $("loading").style.display = "none";
-          $("status").textContent = "카카오 로드뷰 연결됨";
-        } else {
-          $("status").textContent =
-            "주변 로드뷰 없음 · 다음 지점을 찾는 중";
-        }
-      }
-    );
-  }
-
-  function initKakao() {
-    const start = new kakao.maps.LatLng(
-      coords[0][1], coords[0][0]
-    );
-
-    roadview = new kakao.maps.Roadview(
-      $("roadview"),
-      {pan: 0, tilt: 0, zoom: 0}
-    );
-    roadviewClient = new kakao.maps.RoadviewClient();
-
-    kakao.maps.event.addListener(roadview, "init", function() {
-      updateRoad(true);
-    });
-
-    roadviewClient.getNearestPanoId(start, 100, function(panoId) {
-      if (panoId) {
-        roadview.setPanoId(panoId, start);
-        roadview.setViewpoint({pan: 0, tilt: 0, zoom: 0});
-        $("loading").style.display = "none";
-        $("status").textContent = "로드뷰 준비 완료";
-      } else {
-        $("loading").textContent =
-          "출발지 주변에 로드뷰가 없습니다.";
-      }
-    });
-  }
-
-  window.initDriveMap = initKakao;
-
-  function loadKakao() {
-    if (!KEY) {
-      $("loading").textContent =
-        "카카오 JavaScript 키를 설정해 주세요.";
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src =
-      "https://dapi.kakao.com/v2/maps/sdk.js?appkey="
-      + encodeURIComponent(KEY)
-      + "&autoload=false";
-    script.onload = function() {
-      kakao.maps.load(initKakao);
-    };
-    script.onerror = function() {
-      $("loading").textContent =
-        "카카오 SDK 로딩 실패: 키와 도메인을 확인하세요.";
-    };
-    document.head.appendChild(script);
-  }
-
-  window.addEventListener("keydown", e => {
-    const k = e.key.toLowerCase();
-    if (
-      ["arrowup", "arrowdown", "arrowleft", "arrowright", " "]
-        .includes(k) || e.code === "Space"
-    ) e.preventDefault();
-    keys[k] = true;
-    if (e.code === "Space") keys.space = true;
-  });
-
-  window.addEventListener("keyup", e => {
-    keys[e.key.toLowerCase()] = false;
-    if (e.code === "Space") keys.space = false;
-  });
-
-  document.querySelectorAll("[data-key]").forEach(button => {
-    const k = button.dataset.key.toLowerCase();
-    const down = e => {
-      e.preventDefault();
-      keys[k] = true;
-    };
-    const up = e => {
-      e.preventDefault();
-      keys[k] = false;
-    };
-    button.addEventListener("pointerdown", down);
-    button.addEventListener("pointerup", up);
-    button.addEventListener("pointerleave", up);
-    button.addEventListener("pointercancel", up);
-  });
-
-  $("reset").addEventListener("click", () => {
-    speed = 0;
-    progress = 0;
-    fuel = cfg.fuelLiters;
-    headingOffset = 0;
-    currentSegment = -1;
-    updateRoad(true);
-  });
-
-  function frame(now) {
-    const dt = Math.min((now - last) / 1000, 0.05);
-    last = now;
-
-    const up = keys.w || keys.arrowup;
-    const down = keys.s || keys.arrowdown || keys.space;
-    const left = keys.a || keys.arrowleft;
-    const right = keys.d || keys.arrowright;
-
-    if (up) speed = Math.min(100, speed + 25 * dt);
-    else speed = Math.max(0, speed - 5 * dt);
-
-    if (down) speed = Math.max(0, speed - 55 * dt);
-
-    const steer = (right ? 1 : 0) - (left ? 1 : 0);
-    headingOffset += steer * 40 * dt;
-    headingOffset = Math.max(-60, Math.min(60, headingOffset));
-
-    if (!left && !right) headingOffset *= Math.pow(0.94, dt * 60);
-
-    if (speed > 0 && progress < 1) {
-      const meters = speed / 3.6 * dt;
-      progress = Math.min(1, progress + meters / Math.max(totalMeters, 1));
-      fuel = Math.max(
-        0, fuel - meters / 1000 / Math.max(cfg.efficiency, 1)
-      );
-
-      updateRoad();
-    }
-
-    $("speed").textContent = Math.round(speed);
-    $("fuel").textContent = fuel.toFixed(2);
-    $("remaining").textContent =
-      (cfg.distanceKm * (1 - progress)).toFixed(2) + " km";
-    $("cost").textContent =
-      Math.round((cfg.fuelLiters - fuel) * cfg.fuelPrice)
-      .toLocaleString() + "원";
-
-    if (progress >= 1) $("status").textContent = "목적지 도착";
-
-    requestAnimationFrame(frame);
-  }
-
-  loadKakao();
-  requestAnimationFrame(frame);
-})();
-</script>
-"""
-
-    game_html = (
-        game_html
-        .replace("KAKAO_KEY_DATA", key_json)
-        .replace("ROUTE_DATA", coords_json)
-        .replace("CONFIG_DATA", config_json)
+with st.sidebar:
+    st.header("🗺️ ROUTE SETUP")
+    start_text = st.text_input(
+        "출발지",
+        placeholder="예: 수원역"
+    )
+    end_text = st.text_input(
+        "도착지",
+        placeholder="예: 에버랜드"
+    )
+    fuel_price = st.number_input(
+        "휘발유 가격 (원/L)",
+        min_value=0,
+        value=1700,
+        step=10
+    )
+    fuel_efficiency = st.number_input(
+        "연비 (km/L)",
+        min_value=1.0,
+        value=12.0,
+        step=0.5
     )
 
-    components.html(game_html, height=680, scrolling=False)
-
-    st.subheader("실제 도로 경로")
-
-    route_map = folium.Map(
-        location=[start["lat"], start["lon"]],
-        zoom_start=13
-    )
-    points = [(lat, lon) for lon, lat in route["coordinates"]]
-
-    folium.PolyLine(
-        points, color="#159cff", weight=5
-    ).add_to(route_map)
-
-    folium.Marker(
-        [start["lat"], start["lon"]],
-        tooltip="출발지"
-    ).add_to(route_map)
-
-    folium.Marker(
-        [end["lat"], end["lon"]],
-        tooltip="목적지"
-    ).add_to(route_map)
-
-    route_map.fit_bounds(points)
-
-    st_folium(
-        route_map,
-        height=420,
+    search_clicked = st.button(
+        "경로 검색",
         use_container_width=True
     )
 
-    st.caption(
-        "학습용 시뮬레이터입니다. "
-        "가상 차량 애니메이션은 실제 교통 상황과 연동되지 않습니다."
-    )
+if search_clicked:
+    if not start_text.strip() or not end_text.strip():
+        st.error("출발지와 도착지를 모두 입력해 주세요.")
+    else:
+        try:
+            with st.spinner("실제 경로를 검색하고 있습니다..."):
+                start_point = geocode(start_text.strip())
+                end_point = geocode(end_text.strip())
 
-else:
-    st.info(
-        "출발지와 목적지를 입력한 뒤 경로 검색을 눌러 주세요."
+                if not start_point or not end_point:
+                    st.error(
+                        "장소를 찾지 못했습니다. "
+                        "더 구체적인 주소나 장소명을 입력해 주세요."
+                    )
+                else:
+                    route_data = get_route(start_point, end_point)
+
+                    if not route_data:
+                        st.error("경로를 찾지 못했습니다.")
+                    else:
+                        st.session_state["route_data"] = route_data
+                        st.session_state["start_point"] = start_point
+                        st.session_state["end_point"] = end_point
+                        st.session_state["start_text"] = start_text
+                        st.session_state["end_text"] = end_text
+                        st.session_state["fuel_price"] = fuel_price
+                        st.session_state["fuel_efficiency"] = fuel_efficiency
+
+        except requests.RequestException:
+            st.error(
+                "경로 검색 서버에 연결하지 못했습니다. "
+                "잠시 후 다시 시도해 주세요."
+            )
+
+# -------------------------------
+# 경로 정보
+# -------------------------------
+
+route_data = st.session_state.get("route_data")
+
+if not route_data:
+    st.markdown("## 당신의 다음 드라이브를 시작하세요.")
+    st.write(
+        "왼쪽에서 출발지와 도착지를 입력하고 경로를 검색해 주세요. "
+        "검색이 완료되면 게임 화면과 실제 경로 정보를 확인할 수 있습니다."
     )
+    st.info(
+        "게임 도로는 가상으로 생성됩니다. "
+        "실제 경로는 거리 계산과 지도 표시를 위해 사용됩니다."
+    )
+    st.stop()
+
+distance = route_data["distance_km"]
+duration = route_data["duration_min"]
+fuel_cost = (
+    distance / st.session_state["fuel_efficiency"]
+) * st.session_state["fuel_price"]
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("ROUTE DISTANCE", f"{distance:.1f} km")
+m2.metric("EST. TIME", f"{duration:.0f} min")
+m3.metric("EST. FUEL COST", f"{fuel_cost:,.0f}원")
+m4.metric("GAME MODE", "ARCADE")
+
+st.divider()
+
+# -------------------------------
+# 아케이드 카트 게임
+# -------------------------------
+
+st.subheader("🏁 ARCADE DRIVE")
+st.caption(
+    "조작: ← → 또는 A/D · 가속: ↑ 또는 W · 감속: ↓ 또는 S · "
+    "게임 화면을 한 번 클릭한 후 조작하세요."
+)
+
+game_html = r"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: #090d12;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+#wrap {
+    width: 100%;
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #101820;
+}
+canvas {
+    display: block;
+    width: 100%;
+    height: 520px;
+    outline: none;
+}
+#hud {
+    position: absolute;
+    inset: 12px 12px auto 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    pointer-events: none;
+}
+.panel {
+    background: rgba(8,12,18,.78);
+    border: 1px solid rgba(255,255,255,.15);
+    padding: 10px 13px;
+    border-radius: 10px;
+    min-width: 90px;
+}
+.small {
+    font-size: 10px;
+    color: #aab5c5;
+    letter-spacing: 1px;
+}
+.value {
+    font-size: 20px;
+    font-weight: 900;
+    margin-top: 3px;
+}
+#bottom {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#bar {
+    height: 7px;
+    background: #333c47;
+    border-radius: 20px;
+    flex: 1;
+    overflow: hidden;
+}
+#progress {
+    height: 100%;
+    width: 0%;
+    background: #e7ff4f;
+}
+#overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(4,8,13,.62);
+}
+#card {
+    text-align: center;
+    padding: 25px;
+    width: min(360px, 90%);
+    border: 1px solid #3b4654;
+    background: rgba(14,19,27,.95);
+    border-radius: 16px;
+}
+#card h1 { margin: 0 0 8px; font-size: 30px; }
+#card p { color: #b9c3d0; font-size: 13px; line-height: 1.6; }
+button {
+    border: 0;
+    background: #e7ff4f;
+    color: #111;
+    border-radius: 9px;
+    font-weight: 900;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 14px;
+}
+#controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background: #0d1219;
+}
+.control {
+    background: #202936;
+    color: white;
+    border: 1px solid #3a4656;
+    border-radius: 10px;
+    width: 58px;
+    height: 44px;
+    font-size: 20px;
+    touch-action: none;
+    user-select: none;
+}
+#hint {
+    font-size: 11px;
+    color: #9da9b8;
+    text-align: center;
+    padding: 0 8px 10px;
+    background: #0d1219;
+}
+@media(max-width:600px) {
+    canvas { height: 440px; }
+    .panel { min-width: 0; padding: 7px; }
+    .value { font-size: 16px; }
+    .small { font-size: 8px; }
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+    <canvas id="game" tabindex="0"></canvas>
+    <div id="hud">
+        <div class="panel">
+            <div class="small">SPEED</div>
+            <div class="value"><span id="speed">0</span> <span style="font-size:11px">km/h</span></div>
+        </div>
+        <div class="panel">
+            <div class="small">FUEL</div>
+            <div class="value"><span id="fuel">100</span>%</div>
+        </div>
+        <div class="panel">
+            <div class="small">DISTANCE</div>
+            <div class="value"><span id="remain">--</span> km</div>
+        </div>
+    </div>
+    <div id="bottom">
+        <span class="small">ROUTE</span>
+        <div id="bar"><div id="progress"></div></div>
+        <span id="percent" class="small">0%</span>
+    </div>
+    <div id="overlay">
+        <div id="card">
+            <h1 id="headline">READY, DRIVER?</h1>
+            <p id="message">가속 페달을 밟고 도로 위를 달려보세요.<br>다른 차량과 도로 가장자리를 조심하세요.</p>
+            <button id="start">START RACE →</button>
+        </div>
+    </div>
+</div>
+<div id="controls">
+    <button class="control" id="left">◀</button>
+    <button class="control" id="brake">▼</button>
+    <button class="control" id="gas">▲</button>
+    <button class="control" id="right">▶</button>
+</div>
+<div id="hint">W / ↑ 가속 · S / ↓ 감속 · A / ← 좌회전 · D / → 우회전</div>
+
+<script>
+const DISTANCE = __DISTANCE__;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let W = 900, H = 520;
+let running = false;
+let finished = false;
+let speed = 0;
+let fuel = 100;
+let progress = 0;
+let playerX = 0;
+let roadPhase = 0;
+let elapsed = 0;
+let lastTime = 0;
+let traffic = [];
+let keys = {};
+let steering = 0;
+
+function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    W = Math.max(320, rect.width);
+    H = Math.max(350, rect.height);
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+function roadCenter(y) {
+    const t = 1 - y / H;
+    return W * 0.5 +
+        Math.sin(roadPhase + t * 2.4) * W * 0.11 * t +
+        Math.sin(roadPhase * 0.5 + t * 5) * W * 0.035 * t;
+}
+function roadHalf(y) {
+    const t = 1 - y / H;
+    return W * (0.09 + 0.39 * t);
+}
+function polygon(points, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i=1; i<points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+    ctx.closePath();
+    ctx.fill();
+}
+function drawTree(x,y,s) {
+    ctx.fillStyle = "#563b28";
+    ctx.fillRect(x-s*.08,y,s*.16,s*.45);
+    ctx.fillStyle = "#176d46";
+    ctx.beginPath();
+    ctx.moveTo(x,y-s*.65);
+    ctx.lineTo(x-s*.36,y+s*.08);
+    ctx.lineTo(x+s*.36,y+s*.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#278b50";
+    ctx.beginPath();
+    ctx.moveTo(x,y-s*.95);
+    ctx.lineTo(x-s*.26,y-s*.15);
+    ctx.lineTo(x+s*.26,y-s*.15);
+    ctx.closePath();
+    ctx.fill();
+}
+function drawWorld(dt) {
+    const sky = ctx.createLinearGradient(0,0,0,H*.55);
+    sky.addColorStop(0,"#70c7ff");
+    sky.addColorStop(1,"#d5f2ff");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,W,H);
+
+    // Sun and distant hills
+    ctx.fillStyle = "#fff3a4";
+    ctx.beginPath();
+    ctx.arc(W*.82,H*.14,Math.min(W,H)*.055,0,Math.PI*2);
+    ctx.fill();
+
+    polygon([[0,H*.43],[W*.13,H*.22],[W*.29,H*.42],
+             [W*.46,H*.24],[W*.65,H*.43],[W*.84,H*.25],
+             [W,H*.42],[W,H*.6],[0,H*.6]],"#87a9a0");
+
+    ctx.fillStyle = "#43985a";
+    ctx.fillRect(0,H*.43,W,H*.57);
+
+    const horizon = H*.43;
+    const stripes = 18;
+    for (let i=0;i<stripes;i++) {
+        const y = horizon + (H-horizon)*i/stripes;
+        const y2 = horizon + (H-horizon)*(i+1)/stripes;
+        const c1 = roadCenter(y), c2 = roadCenter(y2);
+        const r1 = roadHalf(y), r2 = roadHalf(y2);
+        const alternate = Math.floor((roadPhase*5+i))%2===0;
+        polygon([[0,y],[c1-r1,y],[c2-r2,y2],[0,y2]],
+                alternate ? "#3c9550" : "#348748");
+        polygon([[c1+r1,y],[W,y],[W,y2],[c2+r2,y2]],
+                alternate ? "#3c9550" : "#348748");
+    }
+
+    // Road surface
+    polygon([[roadCenter(horizon)-roadHalf(horizon),horizon],
+             [roadCenter(H)-roadHalf(H),H],
+             [roadCenter(H)+roadHalf(H),H],
+             [roadCenter(horizon)+roadHalf(horizon),horizon]],"#555c66");
+
+    // Road edge strips
+    for (const side of [-1,1]) {
+        polygon([
+            [roadCenter(horizon)+side*roadHalf(horizon),horizon],
+            [roadCenter(H)+side*roadHalf(H),H],
+            [roadCenter(H)+side*(roadHalf(H)+W*.018),H],
+            [roadCenter(horizon)+side*(roadHalf(horizon)+W*.018),horizon]
+        ],"#f5f5ed");
+    }
+
+    // Dashed lane markings
+    for(let i=0;i<15;i++) {
+        const t = ((i/15 + roadPhase*.15)%1);
+        const y = horizon + Math.pow(t,1.65)*(H-horizon);
+        const h = 3 + t*18;
+        const center = roadCenter(y);
+        const half = roadHalf(y);
+        for(let lane=1;lane<=2;lane++) {
+            const x = center-half+half*2*lane/3;
+            ctx.fillStyle = "#f5f3dc";
+            ctx.fillRect(x-1.5-t*2,y,3+t*4,h);
+        }
+    }
+
+    // Decorative roadside trees
+    for(let i=0;i<16;i++) {
+        const t = ((i/16 + roadPhase*.055)%1);
+        const y = horizon + Math.pow(t,1.8)*(H-horizon);
+        const s = 8 + t*58;
+        const c = roadCenter(y), r = roadHalf(y);
+        const side = i%2===0 ? -1 : 1;
+        const x = c + side*(r + 22 + t*35);
+        drawTree(x,y,s);
+    }
+}
+
+function drawKart(x,y,scale,color,isPlayer) {
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.scale(scale,scale);
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,.28)";
+    ctx.beginPath();
+    ctx.ellipse(0,4,24,9,0,0,Math.PI*2);
+    ctx.fill();
+
+    // wheels
+    ctx.fillStyle = "#15191f";
+    ctx.fillRect(-23,-8,9,20);
+    ctx.fillRect(14,-8,9,20);
+
+    // kart body
+    polygon([[-22,-18],[-15,-29],[15,-29],[22,-18],
+             [18,7],[11,15],[-11,15],[-18,7]],color);
+
+    // front bumper
+    ctx.fillStyle = "#e9eef4";
+    ctx.fillRect(-16,-28,32,5);
+
+    // driver helmet
+    ctx.fillStyle = "#ffdf9c";
+    ctx.beginPath();
+    ctx.arc(0,-18,10,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = "#222b36";
+    ctx.fillRect(-8,-20,16,5);
+
+    if(isPlayer) {
+        ctx.fillStyle = "#e7ff4f";
+        ctx.fillRect(-19,5,38,4);
+    }
+    ctx.restore();
+}
+
+function spawnTraffic() {
+    if(traffic.length < 7 && Math.random() < .025) {
+        traffic.push({
+            lane: (Math.random()-.5)*1.35,
+            z: .05,
+            color: ["#ff5252","#38bdf8","#ffb84d","#c084fc"][Math.floor(Math.random()*4)]
+        });
+    }
+}
+
+function drawTraffic(dt) {
+    spawnTraffic();
+    for(let i=traffic.length-1;i>=0;i--) {
+        const car = traffic[i];
+        car.z += dt * (0.09 + speed/850);
+        if(car.z > .97) {
+            traffic.splice(i,1);
+            continue;
+        }
+        const y = H*.43 + Math.pow(car.z,1.7)*H*.57;
+        const c = roadCenter(y), r = roadHalf(y);
+        const x = c + car.lane*r*.78;
+        const scale = .18 + car.z*.85;
+        drawKart(x,y,scale,car.color,false);
+
+        // collision check near player
+        if(car.z > .82 && car.z < .94 &&
+           Math.abs(x-(roadCenter(H*.84)+playerX*roadHalf(H*.84)*.7)) < 28*scale+18) {
+            speed = Math.max(0,speed-28);
+            traffic.splice(i,1);
+        }
+    }
+}
+
+function drawPlayer() {
+    const y = H*.84;
+    const x = roadCenter(y) + playerX*roadHalf(y)*.7;
+    drawKart(x,y,1.25,"#e7ff4f",true);
+}
+
+function drawScene(dt) {
+    drawWorld(dt);
+    drawTraffic(dt);
+    drawPlayer();
+}
+
+function updateHUD() {
+    document.getElementById("speed").textContent = Math.round(speed);
+    document.getElementById("fuel").textContent = Math.max(0,Math.round(fuel));
+    const remaining = Math.max(0,DISTANCE*(1-progress));
+    document.getElementById("remain").textContent = remaining.toFixed(1);
+    document.getElementById("progress").style.width = (progress*100)+"%";
+    document.getElementById("percent").textContent = Math.round(progress*100)+"%";
+}
+
+function showOverlay(title,message,buttonText) {
+    document.getElementById("headline").textContent = title;
+    document.getElementById("message").innerHTML = message;
+    document.getElementById("start").textContent = buttonText;
+    document.getElementById("overlay").style.display = "flex";
+}
+
+function resetGame() {
+    speed=0; fuel=100; progress=0; playerX=0;
+    roadPhase=0; elapsed=0; traffic=[];
+    running=true; finished=false;
+    document.getElementById("overlay").style.display="none";
+    lastTime=performance.now();
+    canvas.focus();
+}
+
+document.getElementById("start").addEventListener("click",resetGame);
+
+function setKey(key, value) {
+    keys[key]=value;
+}
+window.addEventListener("keydown",e=>{
+    const k=e.key.toLowerCase();
+    if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
+    keys[k]=true;
+});
+window.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+window.addEventListener("blur",()=>keys={});
+
+function bindButton(id,key) {
+    const el=document.getElementById(id);
+    el.addEventListener("pointerdown",e=>{
+        e.preventDefault(); setKey(key,true);
+    });
+    ["pointerup","pointercancel","pointerleave"].forEach(evt=>{
+        el.addEventListener(evt,()=>setKey(key,false));
+    });
+}
+bindButton("left","arrowleft");
+bindButton("right","arrowright");
+bindButton("gas","arrowup");
+bindButton("brake","arrowdown");
+
+function loop(now) {
+    const dt=Math.min((now-lastTime)/1000,.05);
+    lastTime=now;
+
+    if(running) {
+        const gas=keys["arrowup"]||keys["w"];
+        const brake=keys["arrowdown"]||keys["s"];
+        const left=keys["arrowleft"]||keys["a"];
+        const right=keys["arrowright"]||keys["d"];
+
+        if(gas && fuel>0) speed += 42*dt;
+        else speed -= 13*dt;
+        if(brake) speed -= 75*dt;
+        speed=Math.max(0,Math.min(180,speed));
+
+        steering=(right?1:0)-(left?1:0);
+        playerX += steering*dt*(0.8+speed/100);
+        playerX=Math.max(-1.25,Math.min(1.25,playerX));
+
+        // Road edge slows the kart
+        if(Math.abs(playerX)>.94) speed=Math.max(0,speed-24*dt);
+
+        roadPhase += dt*(.18+speed/150);
+        elapsed += dt;
+
+        // approximate fuel consumption and route progress
+        const traveledKm = speed*dt/3600;
+        progress += traveledKm/Math.max(DISTANCE,0.1);
+        fuel -= traveledKm*100/Math.max(DISTANCE*0.08,0.5);
+        fuel=Math.max(0,fuel);
+        progress=Math.min(1,progress);
+
+        if(progress>=1) {
+            running=false; finished=true;
+            showOverlay("FINISH! 🏁",
+                "목적지에 도착했습니다.<br>주행 시간: "+Math.floor(elapsed)+"초",
+                "RACE AGAIN ↻");
+        } else if(fuel<=0) {
+            running=false;
+            showOverlay("OUT OF FUEL",
+                "연료가 부족합니다.<br>다시 시작해 주행을 이어가세요.",
+                "TRY AGAIN ↻");
+        }
+
+        updateHUD();
+    }
+
+    drawScene(dt);
+    requestAnimationFrame(loop);
+}
+
+updateHUD();
+showOverlay("READY, DRIVER?",
+    "가속 페달을 밟고 도로 위를 달려보세요.<br>다른 차량과 도로 가장자리를 조심하세요.",
+    "START RACE →");
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
+"""
+
+game_html = game_html.replace(
+    "__DISTANCE__",
+    json.dumps(max(float(distance), 0.1))
+)
+
+components.html(game_html, height=625, scrolling=False)
+
+# -------------------------------
+# 실제 경로 지도
+# -------------------------------
+
+st.divider()
+st.subheader("🗺️ 실제 경로")
+
+start_point = st.session_state["start_point"]
+end_point = st.session_state["end_point"]
+
+route_map = folium.Map(
+    location=[
+        (start_point[0] + end_point[0]) / 2,
+        (start_point[1] + end_point[1]) / 2
+    ],
+    zoom_start=10,
+    tiles="OpenStreetMap"
+)
+
+folium.PolyLine(
+    route_data["coordinates"],
+    color="#3978ff",
+    weight=5,
+    opacity=0.9,
+    tooltip="검색된 주행 경로"
+).add_to(route_map)
+
+folium.Marker(
+    [start_point[0], start_point[1]],
+    tooltip="출발지",
+    popup=st.session_state["start_text"],
+    icon=folium.Icon(color="green", icon="play")
+).add_to(route_map)
+
+folium.Marker(
+    [end_point[0], end_point[1]],
+    tooltip="도착지",
+    popup=st.session_state["end_text"],
+    icon=folium.Icon(color="red", icon="flag")
+).add_to(route_map)
+
+st_folium(
+    route_map,
+    use_container_width=True,
+    height=430,
+    returned_objects=[]
+)
+
+st.caption(
+    "경로 데이터: OpenStreetMap / OSRM 공개 서비스. "
+    "공개 서비스에는 이용 제한이 있으므로 과도한 요청을 피하세요."
+)
