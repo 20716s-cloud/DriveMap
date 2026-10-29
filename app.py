@@ -2,610 +2,294 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(
-    page_title="DriveMap | Open World",
-    page_icon="🚘",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+st.set_page_config(page_title="DriveMap Kart", page_icon="🏎️", layout="wide")
 
 st.markdown("""
 <style>
-    .block-container {
-        max-width: 1200px;
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-    }
-    header[data-testid="stHeader"] {
-        background: transparent;
-    }
+.block-container {max-width:1200px;padding-top:1rem}
+iframe {border:0}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚘 DriveMap")
-st.caption("OPEN WORLD · FREE DRIVE · ARCADE EXPERIENCE")
+st.title("🏎️ DriveMap Kart")
+st.caption("ARCADE RACING · DRIFT · BOOST · TIME ATTACK")
 
 game = r"""
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-* { box-sizing: border-box; }
-body {
-    margin: 0;
-    background: #090e14;
-    color: #f3f7fc;
-    font-family: Arial, sans-serif;
-    overflow: hidden;
-}
-.game {
-    width: 100%;
-    border: 1px solid #293849;
-    border-radius: 15px;
-    overflow: hidden;
-    background: #111923;
-}
-.hud {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 10px;
-    align-items: center;
-    padding: 12px 14px;
-    background: #111923;
-}
-.brand {
-    font-size: 11px;
-    color: #5be6b5;
-    letter-spacing: 2px;
-    font-weight: bold;
-}
-.subtitle {
-    margin-top: 4px;
-    font-size: 12px;
-    color: #93a6bb;
-}
-.metric {
-    min-width: 70px;
-    text-align: right;
-}
-.metric-label {
-    font-size: 10px;
-    color: #8ea2b8;
-    letter-spacing: 1px;
-}
-.metric-value {
-    font-size: 20px;
-    font-weight: bold;
-    margin-top: 4px;
-}
-#speed { color: #5be6b5; }
-.scene {
-    position: relative;
-    width: 100%;
-    background: #8bc5e6;
-}
-canvas {
-    display: block;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 16 / 9;
-    outline: none;
-    touch-action: none;
-}
-.overlay {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    padding: 7px 10px;
-    background: #0b1525c9;
-    border: 1px solid #ffffff22;
-    border-radius: 7px;
-    font-size: 11px;
-    color: #d6e5f5;
-    pointer-events: none;
-}
-.overlay span { color: #5be6b5; }
-.bottom {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px;
-    background: #111923;
-}
-.panel {
-    border: 1px solid #28394b;
-    border-radius: 11px;
-    padding: 10px;
-    background: #0c131c;
-}
-.panel-title {
-    color: #8fa6bd;
-    font-size: 10px;
-    letter-spacing: 1.5px;
-    margin-bottom: 10px;
-}
-.steer {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 7px;
-}
-button {
-    min-height: 42px;
-    border-radius: 8px;
-    border: 1px solid #34475c;
-    background: #1a2838;
-    color: white;
-    font-weight: bold;
-    font-size: 14px;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none;
-}
-button:hover { background: #293d52; }
-button:active, button.active {
-    background: #286b5b;
-    border-color: #5be6b5;
-}
-.controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 7px;
-}
-.controls button { min-height: 46px; }
-.go {
-    background: #5be6b5;
-    color: #06261d;
-    border-color: #5be6b5;
-}
-.go:hover { background: #83f3ce; }
-.reset { grid-column: 1 / -1; }
-.help {
-    padding: 0 13px 13px;
-    background: #111923;
-    color: #91a5ba;
-    font-size: 11px;
-    line-height: 1.6;
-}
-@media (max-width: 520px) {
-    .hud { gap: 6px; padding: 10px; }
-    .metric { min-width: 55px; }
-    .metric-value { font-size: 16px; }
-    .subtitle { font-size: 10px; }
-    .bottom { gap: 7px; padding: 7px; }
-    .panel { padding: 7px; }
-    button { min-height: 38px; }
-}
+*{box-sizing:border-box}
+body{margin:0;background:#101722;color:white;font-family:Arial,sans-serif}
+.hud{display:flex;justify-content:space-between;gap:8px;padding:12px;background:#192434;border-radius:12px 12px 0 0;flex-wrap:wrap}
+.metric{font-size:11px;color:#a9bbce}
+.value{font-size:22px;font-weight:bold;color:#fff;margin-top:4px}
+#speed{color:#56f0c0}
+#boostbar,#driftbar{height:8px;background:#354355;border-radius:8px;overflow:hidden;margin-top:7px}
+#boostfill{height:100%;width:0;background:linear-gradient(90deg,#23c8ff,#65ffcf)}
+#driftfill{height:100%;width:0;background:#ffb84d}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#79c8f0;outline:none;touch-action:none}
+.controls{display:flex;gap:8px;flex-wrap:wrap;padding:12px;background:#192434;border-radius:0 0 12px 12px}
+button{flex:1;min-width:95px;padding:12px 8px;border-radius:8px;border:1px solid #3b5069;background:#26374b;color:white;font-weight:bold;cursor:pointer;touch-action:none}
+button:active,button.active{background:#197d69}
+#boost{background:#087d69;border-color:#4fffd0}
+.note{font-size:12px;color:#9eb2c8;line-height:1.7;padding:10px 2px}
 </style>
 </head>
 <body>
-<div class="game">
-    <div class="hud">
-        <div>
-            <div class="brand">DRIVEMAP / WORLD 01</div>
-            <div class="subtitle">Open Road · Free Drive</div>
-        </div>
-        <div class="metric">
-            <div class="metric-label">SPEED</div>
-            <div class="metric-value"><span id="speed">0</span><span style="font-size:10px"> KM/H</span></div>
-        </div>
-        <div class="metric">
-            <div class="metric-label">DISTANCE</div>
-            <div class="metric-value"><span id="distance">0.00</span><span style="font-size:10px"> KM</span></div>
-        </div>
-    </div>
-
-    <div class="scene">
-        <canvas id="world" width="960" height="540" tabindex="0"
-                aria-label="가상 주행 게임. W A S D 또는 방향키로 운전합니다."></canvas>
-        <div class="overlay">MODE <span>FREE DRIVE</span> &nbsp;·&nbsp; <span id="state">READY</span></div>
-    </div>
-
-    <div class="bottom">
-        <div class="panel">
-            <div class="panel-title">STEERING</div>
-            <div class="steer">
-                <div></div>
-                <button data-key="up">▲</button>
-                <div></div>
-                <button data-key="left">◀</button>
-                <button data-key="down">▼</button>
-                <button data-key="right">▶</button>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-title">DRIVE CONTROL</div>
-            <div class="controls">
-                <button class="go" data-key="up">ACCELERATE</button>
-                <button data-key="down">BRAKE</button>
-                <button data-key="left">LEFT</button>
-                <button data-key="right">RIGHT</button>
-                <button id="reset" class="reset">↻ RESTART DRIVE</button>
-            </div>
-        </div>
-    </div>
-    <div class="help">
-        키보드: W / ↑ 가속 · S / ↓ 감속 · A / ← 좌회전 · D / → 우회전
-        <br>도로 밖으로 나가면 감속됩니다. 게임 화면을 클릭한 뒤 키보드를 사용하세요.
-    </div>
+<div class="hud">
+  <div><div class="metric">SPEED</div><div class="value"><span id="speed">0</span> <small>KM/H</small></div></div>
+  <div><div class="metric">LAP</div><div class="value" id="lap">1 / 3</div></div>
+  <div><div class="metric">RACE TIME</div><div class="value" id="time">00:00.0</div></div>
+  <div style="min-width:110px;flex:1">
+    <div class="metric">BOOST</div><div id="boostbar"><div id="boostfill"></div></div>
+    <div class="metric" style="margin-top:5px">DRIFT</div><div id="driftbar"><div id="driftfill"></div></div>
+  </div>
+</div>
+<canvas id="game" width="960" height="540" tabindex="0"></canvas>
+<div class="controls">
+  <button data-key="left">◀ LEFT</button>
+  <button data-key="down">▼ BRAKE</button>
+  <button data-key="right">RIGHT ▶</button>
+  <button data-key="up">▲ ACCELERATE</button>
+  <button id="boost">⚡ BOOST SPACE</button>
+  <button id="restart">↻ RESTART</button>
+</div>
+<div class="note">
+  방향키 또는 WASD로 조작 · 코너에서 방향키를 누르며 가속하면 드리프트 게이지가 쌓여요.
+  <br>게이지가 충분할 때 Space 또는 BOOST 버튼을 눌러 가속하세요. 트랙을 한 바퀴 돌면 랩이 증가합니다.
 </div>
 
 <script>
 (() => {
-"use strict";
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const W=960,H=540;
+const keys=new Set();
+const el=id=>document.getElementById(id);
 
-const canvas = document.getElementById("world");
-const ctx = canvas.getContext("2d");
-const speedEl = document.getElementById("speed");
-const distEl = document.getElementById("distance");
-const stateEl = document.getElementById("state");
+let speed=0,boost=0,drift=0,steer=0;
+let progress=0,laps=0,raceTime=0;
+let started=false,finished=false;
+let last=performance.now(),boostTime=0;
+const totalLaps=3;
+const trackLength=2400;
 
-const W = canvas.width, H = canvas.height;
-const horizon = 205;
-const keys = new Set();
+// Track geometry: a looping oval with rounded corners
+const track=[
+ [480,90],[600,100],[710,145],[790,220],
+ [815,300],[785,375],[710,425],[600,450],
+ [480,455],[360,450],[250,425],[170,375],
+ [145,300],[170,220],[250,145],[360,100]
+];
 
-let speed = 0;
-let distance = 0;
-let playerX = 0;
-let roadTravel = 0;
-let steering = 0;
-let last = performance.now();
-let elapsed = 0;
-let running = true;
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-function curveAt(z) {
-    return Math.sin(z * 0.00045) * 0.8
-         + Math.sin(z * 0.00019 + 1.7) * 0.6
-         + Math.sin(z * 0.0009) * 0.18;
+function getTrack(t){
+  const n=track.length;
+  const x=t*n;
+  const i=Math.floor(x)%n;
+  const f=x-Math.floor(x);
+  const a=track[i],b=track[(i+1)%n];
+  return {x:a[0]+(b[0]-a[0])*f,y:a[1]+(b[1]-a[1])*f};
 }
-
-function project(z, side) {
-    const depth = 1 / (1 + z * 0.0038);
-    const y = horizon + (H - horizon) * (1 - depth);
-    const roadHalf = 390 * (1 - depth) + 22;
-    const center = W / 2
-        + (curveAt(roadTravel + z) - curveAt(roadTravel)) * 180;
-    return {
-        x: center + side * roadHalf,
-        y,
-        half: roadHalf,
-        center,
-        depth
-    };
-}
-
-function polygon(points, color) {
-    ctx.fillStyle = color;
+function drawTrack(){
+  // grass background
+  ctx.fillStyle='#438b48';ctx.fillRect(0,0,W,H);
+  // grass pattern
+  for(let i=0;i<180;i++){
+    const x=(i*137)%W,y=(i*83)%H;
+    ctx.fillStyle=i%2?'#4a964c':'#3d8142';
+    ctx.fillRect(x,y,18,12);
+  }
+  // road outline
+  ctx.lineCap='round';ctx.lineJoin='round';
+  function pathTrack(offset,width,color){
     ctx.beginPath();
-    ctx.moveTo(points[0][0], points[0][1]);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i][0], points[i][1]);
+    for(let i=0;i<=track.length*8;i++){
+      const p=getTrack(i/(track.length*8));
+      const next=getTrack((i+0.01)/(track.length*8));
+      const dx=next.x-p.x,dy=next.y-p.y;
+      const len=Math.hypot(dx,dy)||1;
+      const x=p.x-dy/len*offset,y=p.y+dx/len*offset;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
     }
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawSky() {
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon + 60);
-    sky.addColorStop(0, "#3979a8");
-    sky.addColorStop(0.65, "#8cc9e8");
-    sky.addColorStop(1, "#d3e8ef");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, horizon + 70);
-
-    // distant mountains
-    polygon([
-        [0, horizon + 30], [90, 155], [170, 191],
-        [260, 135], [360, 193], [480, 149],
-        [590, 190], [710, 133], [840, 186],
-        [960, 150], [960, horizon + 70], [0, horizon + 70]
-    ], "#7899a0");
-
-    polygon([
-        [0, horizon + 45], [130, 180], [230, 206],
-        [350, 172], [460, 210], [590, 175],
-        [730, 205], [860, 170], [960, 205],
-        [960, horizon + 70], [0, horizon + 70]
-    ], "#63846e");
-
-    // sun
-    ctx.fillStyle = "#fff1c3";
-    ctx.beginPath();
-    ctx.arc(780, 78, 27, 0, Math.PI * 2);
-    ctx.fill();
-}
-
-function drawWorld() {
-    ctx.fillStyle = "#547f48";
-    ctx.fillRect(0, horizon, W, H - horizon);
-
-    // roadside ground strips
-    const bands = 55;
-    for (let i = 0; i < bands; i++) {
-        const z1 = i * 13;
-        const z2 = (i + 1) * 13;
-        const a = project(z1, -1);
-        const b = project(z1, 1);
-        const c = project(z2, 1);
-        const d = project(z2, -1);
-
-        const stripe = Math.floor((roadTravel + z1) / 65) % 2;
-        polygon([[0,a.y],[W,a.y],[W,c.y],[0,d.y]],
-            stripe ? "#527d46" : "#5c884c");
-
-        // gravel shoulder
-        polygon([
-            [a.x - 10, a.y], [a.x + 10, a.y],
-            [d.x + 10, d.y], [d.x - 10, d.y]
-        ], "#b9b8a1");
-        polygon([
-            [b.x - 10, b.y], [b.x + 10, b.y],
-            [c.x + 10, c.y], [c.x - 10, c.y]
-        ], "#b9b8a1");
-    }
-
-    // road segments with perspective
-    for (let i = 0; i < bands; i++) {
-        const z1 = i * 13;
-        const z2 = (i + 1) * 13;
-        const l1 = project(z1, -1);
-        const r1 = project(z1, 1);
-        const l2 = project(z2, -1);
-        const r2 = project(z2, 1);
-
-        const stripe = Math.floor((roadTravel + z1) / 85) % 2;
-        polygon([
-            [l1.x,l1.y],[r1.x,r1.y],[r2.x,r2.y],[l2.x,l2.y]
-        ], stripe ? "#343a42" : "#30363e");
-
-        // white road edge lines
-        const edgeWidth = Math.max(1, l1.depth * 5);
-        polygon([
-            [l1.x,l1.y],[l1.x+edgeWidth,l1.y],
-            [l2.x+edgeWidth,l2.y],[l2.x,l2.y]
-        ], "#f0f0dc");
-        polygon([
-            [r1.x-edgeWidth,r1.y],[r1.x,r1.y],
-            [r2.x,r2.y],[r2.x-edgeWidth,r2.y]
-        ], "#f0f0dc");
-
-        // center dashed line
-        if (Math.floor((roadTravel + z1) / 65) % 2 === 0) {
-            const width = Math.max(1, l1.depth * 5);
-            polygon([
-                [l1.center-width/2,l1.y],
-                [l1.center+width/2,l1.y],
-                [l2.center+width/2,l2.y],
-                [l2.center-width/2,l2.y]
-            ], "#f7e8a4");
-        }
-    }
-
-    // trees and small roadside objects
-    for (let i = 0; i < 36; i++) {
-        const z = ((i * 57 + roadTravel * 0.9) % 690 + 690) % 690;
-        const side = i % 2 === 0 ? -1 : 1;
-        const p = project(z, side * 1.34);
-        const size = 8 + p.depth * 40;
-        const sway = Math.sin(i * 9.2) * 10 * p.depth;
-        const x = p.x + sway;
-        const y = p.y;
-
-        if (x < -100 || x > W + 100) continue;
-
-        // tree trunk
-        ctx.fillStyle = "#584735";
-        ctx.fillRect(x - size * .08, y - size * .35,
-                     size * .16, size * .4);
-
-        // tree crown
-        polygon([
-            [x, y - size * 1.65],
-            [x - size * .55, y - size * .45],
-            [x + size * .55, y - size * .45]
-        ], i % 3 === 0 ? "#27583e" : "#34734a");
-
-        polygon([
-            [x, y - size * 1.3],
-            [x - size * .4, y - size * .3],
-            [x + size * .4, y - size * .3]
-        ], "#4b9058");
-    }
-}
-
-function drawCar() {
-    const x = W / 2 + playerX * 220;
-    const y = H - 105;
-    const sway = steering * 9;
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-steering * 0.07);
-
-    // shadow
-    ctx.fillStyle = "#0007";
-    ctx.beginPath();
-    ctx.ellipse(0, 39, 70, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // wheels
-    ctx.fillStyle = "#15191f";
-    ctx.fillRect(-55 + sway, 4, 20, 45);
-    ctx.fillRect(35 + sway, 4, 20, 45);
-
-    // body
-    polygon([
-        [-48, 43], [-55, 14], [-42, -15],
-        [-28, -44], [28, -44], [42, -15],
-        [55, 14], [48, 43]
-    ], "#d83f4c");
-
-    // roof / rear window
-    polygon([
-        [-30, -14], [-20, -38], [20, -38],
-        [30, -14], [36, 4], [-36, 4]
-    ], "#243e52");
-
-    // back glass reflection
-    polygon([
-        [-23, -31], [23, -31], [29, -14], [-29, -14]
-    ], "#6c9eaf");
-
-    // rear lights
-    ctx.fillStyle = "#ffb6a7";
-    ctx.fillRect(-43, 20, 13, 8);
-    ctx.fillRect(30, 20, 13, 8);
-
-    // plate
-    ctx.fillStyle = "#e8e8e0";
-    ctx.fillRect(-12, 24, 24, 7);
-
+    ctx.closePath();ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
+  }
+  pathTrack(0,155,'#d9dfe1');
+  pathTrack(0,139,'#303944');
+  pathTrack(0,4,'#f1dca0');
+  // dashed lane line
+  ctx.setLineDash([15,15]);
+  pathTrack(0,2,'#b9c4ca');
+  ctx.setLineDash([]);
+  // curb blocks
+  for(let i=0;i<track.length*8;i++){
+    const p=getTrack(i/(track.length*8));
+    const q=getTrack((i+0.004)/(track.length*8));
+    const angle=Math.atan2(q.y-p.y,q.x-p.x);
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(angle);
+    ctx.fillStyle=i%2?'#f4f4f4':'#f14f5c';
+    ctx.fillRect(-5,-78,10,12);ctx.fillRect(-5,66,10,12);
     ctx.restore();
-}
-
-function drawSpeedometer() {
-    const cx = W - 80, cy = H - 78;
-    ctx.fillStyle = "#07121ccc";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 43, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = "#5be6b5";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 35, Math.PI * .75, Math.PI * .75 +
-            Math.PI * 1.5 * speed / 180);
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.font = "bold 19px Arial";
-    ctx.fillText(Math.round(speed), cx, cy + 2);
-    ctx.fillStyle = "#a9bdce";
-    ctx.font = "9px Arial";
-    ctx.fillText("KM/H", cx, cy + 17);
-}
-
-function draw() {
-    ctx.clearRect(0, 0, W, H);
-    drawSky();
-    drawWorld();
-    drawCar();
-    drawSpeedometer();
-}
-
-function update(dt) {
-    const up = keys.has("up");
-    const down = keys.has("down");
-    const left = keys.has("left");
-    const right = keys.has("right");
-
-    if (up) speed += 55 * dt;
-    else speed -= 8 * dt;
-
-    if (down) speed -= 95 * dt;
-    speed = clamp(speed, 0, 180);
-
-    const turnInput = (right ? 1 : 0) - (left ? 1 : 0);
-    steering += (turnInput - steering) * Math.min(1, dt * 6);
-
-    const movement = speed / 3.6 * dt;
-    distance += movement / 1000;
-    roadTravel += movement * 2.6;
-
-    // road departure slows the car
-    playerX += steering * dt * (0.25 + speed / 90);
-    if (Math.abs(playerX) > 0.78) {
-        speed = Math.max(0, speed - 35 * dt);
-        playerX = clamp(playerX, -1.25, 1.25);
-        stateEl.textContent = "OFF ROAD";
-    } else if (speed > 1) {
-        stateEl.textContent = "DRIVING";
-    } else {
-        stateEl.textContent = "READY";
+  }
+  // scenery
+  for(let i=0;i<40;i++){
+    const x=(i*197+30)%W,y=(i*113+20)%H;
+    const near=track.reduce((best,p)=>Math.min(best,Math.hypot(p[0]-x,p[1]-y)),999);
+    if(near>110){
+      ctx.fillStyle='#28603a';ctx.beginPath();ctx.arc(x,y,15,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#397c43';ctx.beginPath();ctx.arc(x-3,y-5,11,0,Math.PI*2);ctx.fill();
     }
-
-    speedEl.textContent = Math.round(speed);
-    distEl.textContent = distance.toFixed(2);
+  }
+  // finish line at start of track
+  const p=track[0];
+  ctx.save();ctx.translate(p[0],p[1]);ctx.rotate(0);
+  for(let i=0;i<10;i++){
+    ctx.fillStyle=i%2?'#fff':'#20242a';
+    ctx.fillRect(-7,-69+i*14,15,14);
+  }
+  ctx.restore();
 }
 
-function frame(now) {
-    const dt = Math.min((now - last) / 1000, 0.05);
-    last = now;
-
-    if (running) update(dt);
-    draw();
-    requestAnimationFrame(frame);
+function drawKart(){
+  const p=getTrack(progress/trackLength);
+  const next=getTrack((progress+2)/trackLength);
+  const angle=Math.atan2(next.y-p.y,next.x-p.x)+steer*0.18;
+  const x=p.x,y=p.y;
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+  // shadow
+  ctx.fillStyle='#0007';ctx.beginPath();ctx.ellipse(0,7,23,14,0,0,Math.PI*2);ctx.fill();
+  // wheels
+  ctx.fillStyle='#15191f';
+  ctx.fillRect(-17,-17,10,14);ctx.fillRect(8,-17,10,14);
+  ctx.fillRect(-17,8,10,14);ctx.fillRect(8,8,10,14);
+  // kart body
+  ctx.fillStyle='#f04456';
+  ctx.beginPath();ctx.moveTo(0,-25);ctx.lineTo(16,-10);ctx.lineTo(15,18);
+  ctx.lineTo(8,24);ctx.lineTo(-8,24);ctx.lineTo(-15,18);ctx.lineTo(-16,-10);
+  ctx.closePath();ctx.fill();
+  // cockpit
+  ctx.fillStyle='#283c54';ctx.fillRect(-9,-6,18,13);
+  ctx.fillStyle='#78d9ed';ctx.fillRect(-7,-4,14,6);
+  // headlight
+  ctx.fillStyle='#fff2b1';ctx.fillRect(-12,-22,7,4);ctx.fillRect(5,-22,7,4);
+  if(boostTime>0){
+    ctx.fillStyle='#55eaff';
+    ctx.beginPath();ctx.moveTo(-6,22);ctx.lineTo(0,38+Math.random()*6);ctx.lineTo(6,22);ctx.fill();
+  }
+  ctx.restore();
 }
 
-const keyMap = {
-    ArrowUp: "up", w: "up", W: "up",
-    ArrowDown: "down", s: "down", S: "down",
-    ArrowLeft: "left", a: "left", A: "left",
-    ArrowRight: "right", d: "right", D: "right"
+function drawHUD(){
+  ctx.fillStyle='#122033cc';ctx.fillRect(14,H-80,150,62);
+  ctx.fillStyle='#fff';ctx.font='bold 13px Arial';ctx.fillText('RACE PROGRESS',25,H-58);
+  ctx.fillStyle='#34465b';ctx.fillRect(25,H-46,128,9);
+  ctx.fillStyle='#55e9bd';ctx.fillRect(25,H-46,128*(progress/trackLength%1),9);
+  ctx.fillStyle='#fff';ctx.font='bold 12px Arial';
+  ctx.fillText('DRIVEMAP KART',W-165,28);
+  if(finished){
+    ctx.fillStyle='#07121ddd';ctx.fillRect(220,185,520,150);
+    ctx.textAlign='center';ctx.fillStyle='#62f5c3';ctx.font='bold 34px Arial';
+    ctx.fillText('FINISH!',480,235);
+    ctx.fillStyle='white';ctx.font='20px Arial';
+    ctx.fillText('Time: '+formatTime(raceTime),480,277);
+    ctx.font='14px Arial';ctx.fillText('RESTART를 눌러 다시 레이스하세요',480,308);
+    ctx.textAlign='left';
+  }
+}
+
+function formatTime(t){
+  const m=Math.floor(t/60),s=(t%60).toFixed(1).padStart(4,'0');
+  return String(m).padStart(2,'0')+':'+s;
+}
+function update(dt){
+  if(finished)return;
+  const up=keys.has('up'),down=keys.has('down');
+  const left=keys.has('left'),right=keys.has('right');
+  const turning=left||right;
+
+  if(up){speed+=90*dt;started=true;}
+  else speed-=14*dt;
+  if(down)speed-=130*dt;
+  speed=Math.max(0,Math.min(220,speed));
+
+  if(turning&&up&&speed>40){
+    drift=Math.min(100,drift+34*dt);
+  }else{
+    drift=Math.max(0,drift-20*dt);
+  }
+
+  if(boostTime>0){
+    boostTime-=dt;
+    speed=Math.min(250,speed+100*dt);
+  }
+
+  const steerInput=(right?1:0)-(left?1:0);
+  steer+=(steerInput-steer)*Math.min(1,dt*7);
+
+  const oldLap=Math.floor(progress/trackLength);
+  progress+=speed*dt*(turning?0.85:1);
+  const newLap=Math.floor(progress/trackLength);
+  laps=newLap;
+
+  if(newLap>=totalLaps){
+    progress=trackLength*totalLaps;
+    finished=true;
+    speed=0;
+  }
+
+  if(started&&!finished)raceTime+=dt;
+
+  el('speed').textContent=Math.round(speed);
+  el('lap').textContent=Math.min(laps+1,totalLaps)+' / '+totalLaps;
+  el('time').textContent=formatTime(raceTime);
+  el('boostfill').style.width=boost+'%';
+  el('driftfill').style.width=drift+'%';
+}
+
+function frame(now){
+  const dt=Math.min((now-last)/1000,0.04);last=now;
+  update(dt);
+  drawTrack();drawKart();drawHUD();
+  requestAnimationFrame(frame);
+}
+
+const map={
+ ArrowUp:'up',w:'up',W:'up',
+ ArrowDown:'down',s:'down',S:'down',
+ ArrowLeft:'left',a:'left',A:'left',
+ ArrowRight:'right',d:'right',D:'right'
 };
-
-document.addEventListener("keydown", event => {
-    const action = keyMap[event.key];
-    if (action) {
-        event.preventDefault();
-        keys.add(action);
-    }
+document.addEventListener('keydown',e=>{
+  if(map[e.key]){e.preventDefault();keys.add(map[e.key]);}
+  if(e.code==='Space'){e.preventDefault();useBoost();}
 });
-
-document.addEventListener("keyup", event => {
-    const action = keyMap[event.key];
-    if (action) {
-        event.preventDefault();
-        keys.delete(action);
-    }
+document.addEventListener('keyup',e=>{
+  if(map[e.key]){e.preventDefault();keys.delete(map[e.key]);}
 });
+window.addEventListener('blur',()=>keys.clear());
 
-window.addEventListener("blur", () => keys.clear());
-
-document.querySelectorAll("[data-key]").forEach(button => {
-    const action = button.dataset.key;
-
-    const start = event => {
-        event.preventDefault();
-        keys.add(action);
-        button.classList.add("active");
-        canvas.focus();
-    };
-
-    const stop = event => {
-        event.preventDefault();
-        keys.delete(action);
-        button.classList.remove("active");
-    };
-
-    button.addEventListener("pointerdown", start);
-    button.addEventListener("pointerup", stop);
-    button.addEventListener("pointercancel", stop);
-    button.addEventListener("pointerleave", stop);
+document.querySelectorAll('[data-key]').forEach(btn=>{
+  const k=btn.dataset.key;
+  const start=e=>{e.preventDefault();keys.add(k);btn.classList.add('active');};
+  const stop=e=>{e.preventDefault();keys.delete(k);btn.classList.remove('active');};
+  btn.addEventListener('pointerdown',start);
+  btn.addEventListener('pointerup',stop);
+  btn.addEventListener('pointerleave',stop);
+  btn.addEventListener('pointercancel',stop);
 });
+function useBoost(){
+  if(drift>=30){boostTime=1.7;drift=0;boost=Math.min(100,boost+35);}
+  else if(boost>=30){boostTime=1.7;boost-=30;}
+  else {boost=Math.min(100,boost+8);}
+}
+el('boost').addEventListener('pointerdown',e=>{e.preventDefault();useBoost();});
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.repeat)useBoost();});
 
-document.getElementById("reset").addEventListener("click", () => {
-    speed = 0;
-    distance = 0;
-    playerX = 0;
-    roadTravel = 0;
-    steering = 0;
-    keys.clear();
-    stateEl.textContent = "READY";
-    speedEl.textContent = "0";
-    distEl.textContent = "0.00";
-    canvas.focus();
+el('restart').addEventListener('click',()=>{
+  speed=0;boost=0;drift=0;steer=0;progress=0;laps=0;
+  raceTime=0;started=false;finished=false;boostTime=0;keys.clear();
 });
-
-canvas.addEventListener("click", () => canvas.focus());
-
-draw();
 requestAnimationFrame(frame);
 })();
 </script>
@@ -615,7 +299,4 @@ requestAnimationFrame(frame);
 
 components.html(game, height=760, scrolling=False)
 
-st.caption(
-    "DriveMap Open World · 가상 주행 시뮬레이션 · "
-    "실제 도로 및 차량 물리와는 다릅니다."
-)
+st.caption("DriveMap Kart · 오리지널 아케이드 레이싱 게임")
