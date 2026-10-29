@@ -1,3 +1,67 @@
+import json
+import math
+import requests
+import streamlit as st
+import streamlit.components.v1 as components
+import folium
+from streamlit_folium import st_folium
+
+st.set_page_config(page_title="DriveMap 3D", page_icon="🚗", layout="wide")
+
+st.markdown("""
+<style>
+.stApp {background:#0b0e12;color:#f2f4f8}
+section[data-testid="stSidebar"] {background:#11161d}
+div[data-testid="stMetric"] {background:#141a22;border:1px solid #27313d;padding:14px;border-radius:14px}
+h1,h2,h3 {color:#f4f7fb}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🚗 DriveMap 3D")
+st.caption("실제 도로 경로 · 3D 주행 미리보기 · 거리 · 예상 시간 · 연료 계산")
+st.info("경로는 OpenStreetMap 도로 데이터를 이용해 계산합니다. 교통 정체는 반영되지 않으며, 연료와 도착 시간은 추정치입니다.")
+
+with st.sidebar:
+    st.header("주행 설정")
+    start_text = st.text_input("출발지", "수원역")
+    end_text = st.text_input("목적지", "광교호수공원")
+    fuel_efficiency = st.number_input("차량 연비 (km/L)", min_value=1.0, max_value=50.0, value=12.0, step=0.5)
+    fuel_price = st.number_input("연료 가격 (원/L)", min_value=500, max_value=5000, value=1700, step=50)
+    starting_fuel = st.number_input("현재 연료량 (L)", min_value=0.0, max_value=150.0, value=40.0, step=1.0)
+    search = st.button("경로 찾기", type="primary", use_container_width=True)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def geocode(place):
+    url = "https://nominatim.openstreetmap.org/search"
+    headers = {"User-Agent": "DriveMap3DStudentProject/1.0 (route planning demo)"}
+    response = requests.get(url, params={"q": place + ", South Korea", "format": "jsonv2", "limit": 1}, headers=headers, timeout=20)
+    response.raise_for_status()
+    data = response.json()
+    if not data:
+        raise ValueError(f"장소를 찾지 못했습니다: {place}")
+    return {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"]), "label": data[0]["display_name"]}
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_route(start_lon, start_lat, end_lon, end_lat):
+    url = f"https://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+    response = requests.get(url, params={"overview": "full", "geometries": "geojson", "steps": "true"}, timeout=30)
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("code") != "Ok" or not payload.get("routes"):
+        raise ValueError("이 출발지와 목적지 사이의 경로를 찾지 못했습니다.")
+    route = payload["routes"][0]
+    return {
+        "distance_m": route["distance"],
+        "duration_s": route["duration"],
+        "coordinates": route["geometry"]["coordinates"],
+        "legs": route.get("legs", [])
+    }
+
+if "route_data" not in st.session_state:
+    st.session_state.route_data = None
+if search:
+    try:
+        with st.spinner("실제 도로 경로를 검색하고 있습니다..."):
             start = geocode(start_text)
             end = geocode(end_text)
             route = get_route(start["lon"], start["lat"], end["lon"], end["lat"])
@@ -30,100 +94,3 @@ if data:
     left, right = st.columns([1.05, 1])
     with left:
         st.subheader("실제 지도 경로")
-        m = folium.Map(location=[start["lat"], start["lon"]], zoom_start=12, tiles="OpenStreetMap")
-        points = [(lat, lon) for lon, lat in route["coordinates"]]
-        folium.PolyLine(points, color="#12a8ff", weight=6, opacity=0.9, tooltip="추천 경로").add_to(m)
-        folium.Marker([start["lat"], start["lon"]], tooltip="출발지", popup=start_text, icon=folium.Icon(color="green", icon="play")).add_to(m)
-        folium.Marker([end["lat"], end["lon"]], tooltip="목적지", popup=end_text, icon=folium.Icon(color="red", icon="flag")).add_to(m)
-        if points:
-            m.fit_bounds(points)
-        st_folium(m, height=430, use_container_width=True, returned_objects=[])
-
-    with right:
-        st.subheader("3D 주행 미리보기")
-        st.caption("아래 화면은 실제 경로의 모양을 단순화해 3D 도로로 표현합니다. 실제 건물·차선 정보와 동일한 시뮬레이터는 아닙니다.")
-        coords_json = json.dumps(route["coordinates"])
-        components.html(f"""
-<div id="drive3d" style="width:100%;height:430px;border-radius:14px;overflow:hidden;background:#080d14;position:relative">
-  <div style="position:absolute;z-index:2;top:10px;left:12px;color:#e8f3ff;font:12px Arial;background:#111b29cc;padding:7px 10px;border-radius:8px">DRIVEMAP · 3D PREVIEW</div>
-  <div style="position:absolute;z-index:2;bottom:10px;left:12px;color:#b9c8d8;font:12px Arial">마우스로 회전 · 휠로 확대/축소</div>
-</div>
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import {{ OrbitControls }} from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-const root = document.getElementById('drive3d');
-const coords = {coords_json};
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x080d14);
-scene.fog = new THREE.Fog(0x080d14, 80, 260);
-const camera = new THREE.PerspectiveCamera(55, root.clientWidth/root.clientHeight, 0.1, 1000);
-camera.position.set(0, 18, 30);
-const renderer = new THREE.WebGLRenderer({{antialias:true}});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(root.clientWidth, root.clientHeight);
-renderer.shadowMap.enabled = true;
-root.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xc6e4ff, 0x18202b, 2.0));
-const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(10,30,15); scene.add(sun);
-const grid = new THREE.GridHelper(240, 48, 0x22354a, 0x142333); grid.position.y=-0.08; scene.add(grid);
-const coords2 = coords.filter((p,i)=>i===0 || i===coords.length-1 || i%Math.max(1,Math.floor(coords.length/180))===0);
-const lon0=coords2[0][0], lat0=coords2[0][1];
-const scaleX=Math.cos(lat0*Math.PI/180)*111.32, scaleZ=110.57;
-let raw=coords2.map(p=>new THREE.Vector3((p[0]-lon0)*scaleX*1.0,0,(p[1]-lat0)*scaleZ*-1.0));
-if(raw.length<2) raw=[new THREE.Vector3(-20,0,0),new THREE.Vector3(20,0,0)];
-const box=new THREE.Box3().setFromPoints(raw); const center=box.getCenter(new THREE.Vector3());
-raw=raw.map(p=>p.sub(center));
-const length=raw.length;
-const path=new THREE.CatmullRomCurve3(raw);
-const pts=path.getPoints(Math.max(100,Math.min(600,length*4)));
-const roadGeo=new THREE.BufferGeometry().setFromPoints(pts);
-const roadMat=new THREE.LineBasicMaterial({{color:0x687483,linewidth:3}});
-const roadLine=new THREE.Line(roadGeo,roadMat); roadLine.position.y=0.04; scene.add(roadLine);
-// Wider road ribbon following the actual route shape
-const ribbonVerts=[], ribbonIndices=[];
-for(let i=0;i<pts.length;i++){{
- const tangent=path.getTangent(i/(pts.length-1)).normalize();
- const side=new THREE.Vector3(-tangent.z,0,tangent.x).normalize();
- const p=pts[i];
- ribbonVerts.push(p.x+side.x*3.4,0,p.z+side.z*3.4,p.x-side.x*3.4,0,p.z-side.z*3.4);
- if(i<pts.length-1){{let a=i*2,b=a+1,c=a+2,d=a+3;ribbonIndices.push(a,b,c,b,d,c);}}
-}}
-const rg=new THREE.BufferGeometry(); rg.setAttribute('position',new THREE.Float32BufferAttribute(ribbonVerts,3)); rg.setIndex(ribbonIndices); rg.computeVertexNormals();
-const road=new THREE.Mesh(rg,new THREE.MeshStandardMaterial({{color:0x26313d,roughness:0.95,side:THREE.DoubleSide}})); road.position.y=0.02; scene.add(road);
-// dashed center line
-for(let i=0;i<pts.length;i+=8){{const p=pts[i]; const dash=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.025,1.1),new THREE.MeshBasicMaterial({{color:0xe6edf5}}));dash.position.set(p.x,0.08,p.z);dash.rotation.y=Math.atan2(path.getTangent(i/(pts.length-1)).x,path.getTangent(i/(pts.length-1)).z);scene.add(dash);}}
-function marker(pos,color){{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.25,18),new THREE.MeshStandardMaterial({{color}}));mesh.position.set(pos.x,0.3,pos.z);scene.add(mesh);}}
-marker(pts[0],0x38d982); marker(pts[pts.length-1],0xff5a67);
-const car=new THREE.Group();
-const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.55,2.7),new THREE.MeshStandardMaterial({{color:0x12a8ff,metalness:0.25,roughness:0.35}}));body.position.y=0.72;car.add(body);
-const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.5,1.1),new THREE.MeshStandardMaterial({{color:0x9bdcff,metalness:0.1,roughness:0.2}}));cabin.position.set(0,1.18,-0.1);car.add(cabin);
-for(const x of [-0.82,0.82]) for(const z of [-0.82,0.82]){{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.18,16),new THREE.MeshStandardMaterial({{color:0x080a0d}}));w.rotation.z=Math.PI/2;w.position.set(x,0.42,z);car.add(w);}}
-scene.add(car);
-const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.target.set(0,0,0);
-const lookAt=new THREE.Vector3();
-let t=0, last=performance.now();
-function animate(now){{requestAnimationFrame(animate); const dt=Math.min((now-last)/1000,0.05);last=now;t=(t+dt*0.035)%(1); const p=path.getPointAt(t); const tangent=path.getTangentAt(t);car.position.set(p.x,0,p.z);car.rotation.y=Math.atan2(tangent.x,tangent.z); if(!controls.userInteracting){{camera.position.lerp(new THREE.Vector3(p.x+12, p.y+13, p.z+17),0.018);controls.target.lerp(p,0.025);}}controls.update();renderer.render(scene,camera);}}
-controls.userInteracting=false;
-controls.addEventListener('start',()=>controls.userInteracting=true);
-controls.addEventListener('end',()=>{{setTimeout(()=>controls.userInteracting=false,2500);}});
-window.addEventListener('resize',()=>{{camera.aspect=root.clientWidth/root.clientHeight;camera.updateProjectionMatrix();renderer.setSize(root.clientWidth,root.clientHeight);}});
-animate(performance.now());
-</script>
-""", height=450, scrolling=False)
-
-    with st.expander("계산 기준 보기"):
-        st.write(f"- 경로 거리: {distance_km:.2f} km")
-        st.write(f"- 연료 소비 추정: 거리 ÷ 연비 = {distance_km:.2f} ÷ {fuel_efficiency:.1f} = {fuel_used:.2f} L")
-        st.write(f"- 연료비 추정: 소비 연료 × 리터당 가격 = {cost:,.0f}원")
-        st.write(f"- 출발지 검색 결과: {start['label']}")
-        st.write(f"- 목적지 검색 결과: {end['label']}")
-else:
-    st.markdown("### 시작하기")
-    st.write("왼쪽에서 출발지와 목적지를 입력한 뒤 **경로 찾기**를 누르세요.")
-    st.write("예시: 출발지 `수원역`, 목적지 `광교호수공원`")
-    st.markdown("""
-    **현재 포함된 기능**
-    - 실제 도로 데이터를 기반으로 한 경로 탐색
-    - 도로 거리와 기본 경로 시간
-    - 연비·연료 가격·현재 연료량 입력
-
