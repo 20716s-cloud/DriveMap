@@ -1,5 +1,596 @@
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEON BREACH: SURVIVAL</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#10130f;color:#f1f4ec;font-family:Arial,sans-serif}
+#game{height:740px;position:relative;overflow:hidden;background:#242b23}
+canvas{display:block;width:100%;height:100%;outline:none}
+#hud{position:absolute;inset:0;pointer-events:none}
+.brand{position:absolute;left:17px;top:15px;font-weight:900;font-size:19px;letter-spacing:2px}
+.brand span{color:#b6d68a}
+#top{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:#10130fce;border:1px solid #ffffff2a;padding:10px 17px;border-radius:5px;white-space:nowrap;font-size:13px}
+#cross{position:absolute;left:50%;top:50%;width:16px;height:16px;transform:translate(-50%,-50%)}
+#cross:before,#cross:after{content:"";position:absolute;background:#e5f3c8;box-shadow:0 0 3px #000}
+#cross:before{left:7px;top:0;width:2px;height:16px}
+#cross:after{left:0;top:7px;width:16px;height:2px}
+#help{position:absolute;right:14px;top:14px;text-align:right;font-size:11px;line-height:1.8;color:#d5dccd;background:#10130f8c;padding:8px}
+#stats{position:absolute;left:16px;bottom:15px;background:#10130fd9;border:1px solid #ffffff30;padding:10px 14px;min-width:130px}
+#ammo{position:absolute;right:16px;bottom:15px;text-align:right;background:#10130fd9;border:1px solid #ffffff30;padding:10px 14px}
+.label{font-size:10px;letter-spacing:2px;color:#b1bca8}
+.big{font-size:26px;font-weight:900;margin-top:4px}
+#healthbar{width:150px;height:5px;background:#495043;margin-top:7px}
+#healthfill{height:100%;width:100%;background:#b6d68a}
+#panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,90%);padding:26px;background:#10150feF;border:1px solid #a7c27f;text-align:center}
+#panel h1{letter-spacing:2px;margin:0 0 12px;font-size:27px}
+#panel p{color:#c0c9b8;line-height:1.6;font-size:13px}
+button{border:0;background:#b6d68a;color:#172010;padding:12px 23px;font-weight:900;cursor:pointer}
+#notice{position:absolute;top:65px;left:50%;transform:translateX(-50%);font-size:12px;color:#d9e7c7}
+#damage{position:absolute;inset:0;border:0 solid #b52c2c;pointer-events:none}
+@media(max-width:650px){
+ #game{height:680px}
+ #help{display:none}
+ #top{font-size:10px;padding:8px}
+ .brand{font-size:14px}
+ #stats{left:5px;bottom:5px;padding:7px}
+ #ammo{right:5px;bottom:5px;padding:7px}
+}
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="brand">NEON BREACH <span>SURVIVAL</span></div>
+  <div id="top">SURVIVORS <b id="survivors">6</b>　|　TIME <b id="timer">120</b>s</div>
+  <div id="help">W A S D　이동<br>마우스　조준<br>왼쪽 클릭　사격<br>R　재장전<br>Shift　달리기<br>Q　빠른 대시<br>Esc　일시정지</div>
+  <div id="cross"></div>
+  <div id="notice">훈련 구역 · 적 <span id="enemies">5</span>명</div>
+  <div id="damage"></div>
+  <div id="stats">
+    <div class="label">HEALTH</div>
+    <div class="big"><span id="hp">100</span></div>
+    <div id="healthbar"><div id="healthfill"></div></div>
+  </div>
+  <div id="ammo">
+    <div class="label">ASSAULT RIFLE</div>
+    <div class="big"><span id="mag">30</span> <span style="font-size:14px;color:#a5b09c">/ <span id="reserve">120</span></span></div>
+    <div class="label">AMMUNITION</div>
+  </div>
+  <div id="panel">
+    <h1>NEON BREACH</h1>
+    <p>현실적인 전장 스타일의 1인칭 생존 훈련입니다.</p>
+    <p>건물과 나무를 엄폐물로 이용하고 적 봇을 제압하세요.</p>
+    <p>WASD 이동 · 마우스 조준 · 왼쪽 클릭 사격</p>
+    <button id="start">DEPLOY / 시작</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const root = document.querySelector('#game');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9ba69b);
+scene.fog = new THREE.Fog(0x9ba69b, 35, 100);
+
+const camera = new THREE.PerspectiveCamera(
+  76, root.clientWidth/root.clientHeight, 0.1, 150
+);
+camera.rotation.order = 'YXZ';
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.6));
 renderer.setSize(root.clientWidth,root.clientHeight);
-renderer.shadowMap.enabled=true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 root.prepend(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xe0e8dc,0x434b3c,2.0));
+const sunlight = new THREE.DirectionalLight(0xfff2dc,2.3);
+sunlight.position.set(-20,35,12);
+sunlight.castShadow = true;
+sunlight.shadow.mapSize.set(1024,1024);
+scene.add(sunlight);
+
+function mat(color,roughness=.8,metalness=0){
+ return new THREE.MeshStandardMaterial({color,roughness,metalness});
+}
+
+const groundMat = mat(0x555b49);
+const concreteMat = mat(0x77796e);
+const darkMat = mat(0x3b4039);
+const woodMat = mat(0x5b4b37);
+const leafMat = mat(0x3f5737);
+const leafMat2 = mat(0x536746);
+const metalMat = mat(0x555b59,.5,.5);
+const redMat = new THREE.MeshStandardMaterial({
+ color:0x852e28,roughness:.65
+});
+
+const obstacles = [];
+
+function addBox(x,y,z,w,h,d,material,collide=true){
+ const mesh = new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),material
+ );
+ mesh.position.set(x,y,z);
+ mesh.castShadow = true;
+ mesh.receiveShadow = true;
+ scene.add(mesh);
+ if(collide)obstacles.push({x,z,w,d});
+ return mesh;
+}
+
+addBox(0,-.3,0,100,.6,100,groundMat,false);
+
+// Dirt and grass-colored terrain patches.
+for(let i=0;i<100;i++){
+ const size=1+Math.random()*5;
+ const patch=new THREE.Mesh(
+  new THREE.CircleGeometry(size,8),
+  mat(Math.random()>.5?0x4d5841:0x625d49)
+ );
+ patch.rotation.x=-Math.PI/2;
+ patch.position.set(
+  (Math.random()-.5)*90,.015,(Math.random()-.5)*90
+ );
+ scene.add(patch);
+}
+
+// Boundary walls.
+addBox(0,2,-49,100,4,1,darkMat);
+addBox(0,2,49,100,4,1,darkMat);
+addBox(-49,2,0,1,4,100,darkMat);
+addBox(49,2,0,1,4,100,darkMat);
+
+// Small buildings with doors and windows.
+function building(x,z,w,d){
+ const h=4+Math.random()*1.5;
+ addBox(x,h/2,z,w,h,d,concreteMat);
+ addBox(x,h+.12,z,w+.1,.25,d+.1,darkMat,false);
+
+ // Dark window openings represented as surface panels.
+ for(const side of [-1,1]){
+  const win=new THREE.Mesh(
+   new THREE.BoxGeometry(w*.18,1.0,.06),
+   mat(0x252e30,.25,.2)
+  );
+  win.position.set(x+w*.22,h*.65,z+side*(d/2+.04));
+  scene.add(win);
+ }
+ // Door panel
+ const door=new THREE.Mesh(
+  new THREE.BoxGeometry(1.1,2.25,.08),mat(0x34352e)
+ );
+ door.position.set(x-w*.22,1.12,z+d/2+.05);
+ scene.add(door);
+}
+building(-20,-18,12,9);
+building(20,-22,13,10);
+building(22,16,12,9);
+building(-23,20,11,10);
+building(2,-31,10,7);
+
+// Cargo containers and concrete barriers.
+for(const p of [
+ [-8,1,-12,7,2,3],[8,1,-7,6,2,3],
+ [-14,1,5,5,2,3],[14,1,6,5,2,3],
+ [0,1,15,7,2,3],[-5,1,30,5,2,3],
+ [30,1,-4,5,2,3],[-31,1,-5,5,2,3],
+ [5,1,35,6,2,3]
+]){
+ addBox(...p,metalMat);
+}
+
+// Procedural trees made from trunk and several foliage clusters.
+function tree(x,z,s=1){
+ const trunk=new THREE.Mesh(
+  new THREE.CylinderGeometry(.22*s,.35*s,3*s,7),woodMat
+ );
+ trunk.position.set(x,1.5*s,z);
+ trunk.castShadow=true;
+ scene.add(trunk);
+
+ for(let i=0;i<3;i++){
+  const crown=new THREE.Mesh(
+   new THREE.ConeGeometry((1.5-i*.2)*s,2.2*s,7),
+   i%2?leafMat:leafMat2
+  );
+  crown.position.set(x,(3+i*.75)*s,z);
+  crown.castShadow=true;
+  crown.receiveShadow=true;
+  scene.add(crown);
+ }
+ obstacles.push({x,z,w:.9*s,d:.9*s});
+}
+
+for(let i=0;i<45;i++){
+ let x=(Math.random()-.5)*88;
+ let z=(Math.random()-.5)*88;
+ if(Math.abs(x)<15&&z>0)continue;
+ tree(x,z,.8+Math.random()*.6);
+}
+
+// First-person weapon model.
+const gun = new THREE.Group();
+camera.add(gun);
+scene.add(camera);
+
+const gunBodyMat=mat(0x252a28,.35,.65);
+const gunDarkMat=mat(0x101514,.3,.7);
+const gunBody=new THREE.Mesh(
+ new THREE.BoxGeometry(.24,.2,.72),gunBodyMat
+);
+gunBody.position.set(.32,-.29,-.55);
+gun.add(gunBody);
+
+const stock=new THREE.Mesh(
+ new THREE.BoxGeometry(.18,.17,.35),gunDarkMat
+);
+stock.position.set(.32,-.3,-.18);
+gun.add(stock);
+
+const barrel=new THREE.Mesh(
+ new THREE.CylinderGeometry(.032,.04,.52,12),gunDarkMat
+);
+barrel.rotation.x=Math.PI/2;
+barrel.position.set(.32,-.24,-1.04);
+gun.add(barrel);
+
+const sight=new THREE.Mesh(
+ new THREE.BoxGeometry(.06,.08,.11),gunDarkMat
+);
+sight.position.set(.32,-.16,-.68);
+gun.add(sight);
+
+const magazine=new THREE.Mesh(
+ new THREE.BoxGeometry(.11,.25,.15),gunDarkMat
+);
+magazine.position.set(.32,-.48,-.48);
+gun.add(magazine);
+
+const muzzleLight=new THREE.PointLight(0xffd59b,0,4);
+muzzleLight.position.set(.32,-.24,-1.3);
+gun.add(muzzleLight);
+
+const player={
+ x:0,z:38,yaw:Math.PI,pitch:0,
+ hp:100,mag:30,reserve:120,
+ lastShot:0,reloading:false,dash:0,
+ recoil:0
+};
+camera.position.set(player.x,1.7,player.z);
+camera.rotation.set(0,Math.PI,0);
+
+const bots=[];
+function spawnBot(x,z){
+ const group=new THREE.Group();
+ group.position.set(x,0,z);
+
+ const uniform=mat(0x42483e);
+ const vest=mat(0x373b32,.6);
+ const skin=mat(0xaaa18e);
+
+ const torso=new THREE.Mesh(
+  new THREE.CapsuleGeometry(.34,.68,4,8),uniform
+ );
+ torso.position.y=1.12;
+ torso.castShadow=true;
+ group.add(torso);
+
+ const chest=new THREE.Mesh(
+  new THREE.BoxGeometry(.53,.46,.32),vest
+ );
+ chest.position.set(0,1.2,.02);
+ group.add(chest);
+
+ const head=new THREE.Mesh(
+  new THREE.SphereGeometry(.21,12,10),skin
+ );
+ head.position.y=1.72;
+ group.add(head);
+
+ const helmet=new THREE.Mesh(
+  new THREE.SphereGeometry(.24,12,8,0,Math.PI*2,0,Math.PI/2),
+  darkMat
+ );
+ helmet.position.y=1.82;
+ group.add(helmet);
+
+ for(const side of [-1,1]){
+  const arm=new THREE.Mesh(
+   new THREE.CapsuleGeometry(.095,.42,3,6),uniform
+  );
+  arm.position.set(side*.4,1.15,.05);
+  arm.rotation.z=side*.15;
+  group.add(arm);
+
+  const leg=new THREE.Mesh(
+   new THREE.CapsuleGeometry(.12,.48,3,6),darkMat
+  );
+  leg.position.set(side*.16,.45,0);
+  group.add(leg);
+ }
+
+ // Small weapon held by the bot.
+ const botGun=new THREE.Mesh(
+  new THREE.BoxGeometry(.09,.09,.5),gunDarkMat
+ );
+ botGun.position.set(.27,1.0,.3);
+ group.add(botGun);
+
+ group.userData={
+  hp:100,alive:true,fire:1+Math.random()*2,
+  wander:Math.random()*6
+ };
+ scene.add(group);
+ bots.push(group);
+}
+
+function spawnAll(){
+ bots.forEach(b=>scene.remove(b));
+ bots.length=0;
+ [
+  [-16,-28],[15,-30],[29,7],[-30,9],[2,-8]
+ ].forEach(p=>spawnBot(...p));
+}
+
+const keys={};
+let running=false,locked=false,score=0,time=120;
+let lastFrame=performance.now();
+let firing=false;
+
+const panel=document.querySelector('#panel');
+
+function panelShow(title,description,buttonText,action){
+ panel.innerHTML=
+ `<h1>${title}</h1><p>${description}</p><button id="start">${buttonText}</button>`;
+ document.querySelector('#start').onclick=action;
+ panel.style.display='block';
+}
+
+function begin(){
+ running=true;
+ panel.style.display='none';
+ renderer.domElement.requestPointerLock();
+ lastFrame=performance.now();
+}
+
+document.querySelector('#start').onclick=begin;
+
+document.addEventListener('pointerlockchange',()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+});
+
+document.addEventListener('mousemove',e=>{
+ if(!running||!locked)return;
+ player.yaw-=e.movementX*.002;
+ player.pitch-=e.movementY*.002;
+ player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch));
+ camera.rotation.set(player.pitch,player.yaw,0);
+});
+
+document.addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(e.code==='KeyR')reload();
+ if(e.code==='KeyQ'&&running&&player.dash<=0)player.dash=.25;
+ if(e.code==='Escape'&&running){
+  running=false;
+  panelShow('PAUSED','게임이 일시정지되었습니다.','계속하기',begin);
+ }
+});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+renderer.domElement.addEventListener('mousedown',e=>{
+ if(e.button!==0||!running)return;
+ if(!locked){
+  renderer.domElement.requestPointerLock();
+  return;
+ }
+ firing=true;
+ shoot();
+});
+document.addEventListener('mouseup',()=>firing=false);
+
+function updateHud(){
+ document.querySelector('#hp').textContent=Math.max(0,Math.round(player.hp));
+ document.querySelector('#healthfill').style.width=Math.max(0,player.hp)+'%';
+ document.querySelector('#mag').textContent=player.mag;
+ document.querySelector('#reserve').textContent=player.reserve;
+ document.querySelector('#enemies').textContent=bots.filter(b=>b.userData.alive).length;
+ document.querySelector('#survivors').textContent=
+  bots.filter(b=>b.userData.alive).length+1;
+}
+
+function reload(){
+ if(player.reloading||player.mag===30||player.reserve<=0)return;
+ player.reloading=true;
+ setTimeout(()=>{
+  const amount=Math.min(30-player.mag,player.reserve);
+  player.mag+=amount;
+  player.reserve-=amount;
+  player.reloading=false;
+  updateHud();
+ },1100);
+}
+
+const raycaster=new THREE.Raycaster();
+function shoot(){
+ const now=performance.now();
+ if(now-player.lastShot<115||player.reloading)return;
+ if(player.mag<=0){reload();return;}
+ player.lastShot=now;
+ player.mag--;
+ player.recoil=Math.min(player.recoil+.025,.12);
+ muzzleLight.intensity=3;
+ setTimeout(()=>muzzleLight.intensity=0,45);
+ updateHud();
+
+ raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
+ raycaster.far=90;
+
+ const targets=[];
+ bots.filter(b=>b.userData.alive).forEach(b=>{
+  b.traverse(o=>{if(o.isMesh)targets.push(o);});
+ });
+
+ const hits=raycaster.intersectObjects(targets,false);
+ if(!hits.length)return;
+
+ const obj=hits[0].object;
+ const bot=bots.find(b=>{
+  let node=obj;
+  while(node&&node!==b)node=node.parent;
+  return node===b;
+ });
+ if(!bot||!bot.userData.alive)return;
+
+ bot.userData.hp-=obj.position.y>1.5?70:40;
+ if(bot.userData.hp<=0){
+  bot.userData.alive=false;
+  scene.remove(bot);
+  score++;
+  updateHud();
+
+  if(bots.every(b=>!b.userData.alive)){
+   running=false;
+   document.exitPointerLock();
+   panelShow(
+    'AREA CLEARED',
+    '모든 적을 제압했습니다. 생존 훈련 성공!',
+    '다시 시작',reset
+   );
+  }
+ }
+}
+
+function reset(){
+ player.x=0;player.z=38;
+ player.yaw=Math.PI;player.pitch=0;
+ player.hp=100;player.mag=30;player.reserve=120;
+ player.reloading=false;player.dash=0;player.recoil=0;
+ camera.position.set(0,1.7,38);
+ camera.rotation.set(0,Math.PI,0);
+ score=0;time=120;
+ spawnAll();updateHud();begin();
+}
+
+function blocked(x,z){
+ return obstacles.some(o=>
+  Math.abs(x-o.x)<o.w/2+.4&&
+  Math.abs(z-o.z)<o.d/2+.4
+ );
+}
+
+function update(dt){
+ if(!running)return;
+
+ time-=dt;
+ if(time<=0){
+  time=0;running=false;
+  document.exitPointerLock();
+  panelShow('TIME UP','훈련 시간이 종료되었습니다.','다시 시작',reset);
+  return;
+ }
+
+ let dx=0,dz=0;
+ const forward=new THREE.Vector3(
+  -Math.sin(player.yaw),0,-Math.cos(player.yaw)
+ );
+ const right=new THREE.Vector3(
+  Math.cos(player.yaw),0,-Math.sin(player.yaw)
+ );
+
+ if(keys.KeyW){dx+=forward.x;dz+=forward.z}
+ if(keys.KeyS){dx-=forward.x;dz-=forward.z}
+ if(keys.KeyD){dx+=right.x;dz+=right.z}
+ if(keys.KeyA){dx-=right.x;dz-=right.z}
+
+ const length=Math.hypot(dx,dz)||1;
+ const speed=(keys.ShiftLeft?8:5)*(player.dash>0?3:1);
+ dx=dx/length*speed*dt;
+ dz=dz/length*speed*dt;
+ player.dash=Math.max(0,player.dash-dt);
+
+ if(!blocked(player.x+dx,player.z))player.x+=dx;
+ if(!blocked(player.x,player.z+dz))player.z+=dz;
+ player.x=Math.max(-47,Math.min(47,player.x));
+ player.z=Math.max(-47,Math.min(47,player.z));
+
+ camera.position.set(player.x,1.7,player.z);
+
+ bots.forEach(b=>{
+  if(!b.userData.alive)return;
+  const data=b.userData;
+  const vx=player.x-b.position.x;
+  const vz=player.z-b.position.z;
+  const dist=Math.hypot(vx,vz);
+
+  data.wander+=dt;
+  if(dist>6&&dist<34){
+   const nx=b.position.x+vx/dist*dt*1.25;
+   const nz=b.position.z+vz/dist*dt*1.25;
+   if(!blocked(nx,b.position.z))b.position.x=nx;
+   if(!blocked(b.position.x,nz))b.position.z=nz;
+  }else if(dist>=34){
+   b.position.x+=Math.sin(data.wander)*dt*.3;
+   b.position.z+=Math.cos(data.wander)*dt*.3;
+  }
+
+  b.rotation.y=Math.atan2(vx,vz);
+  data.fire-=dt;
+
+  if(dist<23&&data.fire<=0){
+   data.fire=1.2+Math.random()*1.5;
+   if(Math.random()<.2){
+    player.hp-=7;
+    document.querySelector('#damage').style.borderWidth='5px';
+    setTimeout(()=>{
+     document.querySelector('#damage').style.borderWidth='0';
+    },130);
+    updateHud();
+
+    if(player.hp<=0){
+     player.hp=0;updateHud();running=false;
+     document.exitPointerLock();
+     panelShow('ELIMINATED','전투에서 패배했습니다.','다시 시작',reset);
+    }
+   }
+  }
+ });
+
+ if(firing&&locked)shoot();
+
+ player.recoil=Math.max(0,player.recoil-dt*.22);
+ gun.position.y=(dx||dz)?Math.sin(performance.now()*.012)*.012:0;
+ gun.position.z=-player.recoil;
+ document.querySelector('#timer').textContent=Math.ceil(time);
+}
+
+function loop(now){
+ requestAnimationFrame(loop);
+ const dt=Math.min(.04,(now-lastFrame)/1000);
+ lastFrame=now;
+ update(dt);
+ renderer.render(scene,camera);
+}
+
+window.addEventListener('resize',()=>{
+ camera.aspect=root.clientWidth/root.clientHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(root.clientWidth,root.clientHeight);
+});
+
+spawnAll();
+updateHud();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
