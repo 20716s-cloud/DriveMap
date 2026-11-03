@@ -1,2 +1,5 @@
-
 streamlit
+streamlit-folium
+folium
+requests
+streamlit-autorefresh
