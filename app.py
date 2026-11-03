@@ -1,16 +1,12 @@
 
 import streamlit as st
 import folium
-import time
+import json
+import streamlit.components.v1 as components
 
-from streamlit_folium import st_folium
+from branca.element import Element
 
-from map_engine import (
-    find_location,
-    get_route,
-    get_car_position,
-    get_passed_route
-)
+from map_engine import find_location, get_route
 
 # =====================================
 # 1. 기본 설정
@@ -22,14 +18,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================
-# 2. 디자인
-# =====================================
-
 st.markdown("""
 <style>
 .stApp {
-    background-color: #10151d;
+    background: #10151d;
     color: white;
 }
 
@@ -37,21 +29,12 @@ h1, h2, h3, p, label {
     color: white !important;
 }
 
-[data-testid="stMetric"] {
-    background: #202a38;
-    padding: 16px;
-    border-radius: 12px;
-    border: 1px solid #34445a;
-}
-
-/* 버튼 디자인 */
 div.stButton > button {
-    width: 100%;
-    min-height: 48px;
-    background-color: #263448;
+    background: #263448;
     color: white !important;
     border: 1px solid #52647c;
     border-radius: 10px;
+    min-height: 45px;
     font-weight: bold;
 }
 
@@ -60,44 +43,27 @@ div.stButton > button p {
 }
 
 div.stButton > button:hover {
-    background-color: #3b526f;
-    border-color: #7daeff;
+    background: #3b526f;
     color: white !important;
-}
-
-/* 입력창 */
-div[data-baseweb="input"] input {
-    color: #17202c !important;
-}
-
-/* 구분선 */
-hr {
-    border-color: #34445a;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # =====================================
-# 3. 세션 데이터
+# 2. 세션 데이터
 # =====================================
 
-defaults = {
-    "route": None,
-    "running": False,
-    "progress": 0.0,
-    "speed": 60,
-    "scale": 10,
-    "last_tick": None,
-    "start_name": "수원역",
-    "end_name": "강남역"
-}
+if "route" not in st.session_state:
+    st.session_state.route = None
 
-for key, value in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "start_name" not in st.session_state:
+    st.session_state.start_name = "수원역"
+
+if "end_name" not in st.session_state:
+    st.session_state.end_name = "강남역"
 
 # =====================================
-# 4. 제목
+# 3. 제목
 # =====================================
 
 st.title("🚗 DriveMap")
@@ -106,7 +72,7 @@ st.caption("REAL ROAD DRIVING SIMULATOR")
 st.divider()
 
 # =====================================
-# 5. 출발지와 목적지
+# 4. 출발지와 목적지
 # =====================================
 
 st.subheader("📍 출발지와 목적지")
@@ -116,19 +82,17 @@ col1, col2 = st.columns(2)
 with col1:
     start_name = st.text_input(
         "출발지",
-        value=st.session_state.start_name,
-        key="start_input"
+        value=st.session_state.start_name
     )
 
 with col2:
     end_name = st.text_input(
         "목적지",
-        value=st.session_state.end_name,
-        key="end_input"
+        value=st.session_state.end_name
     )
 
 # =====================================
-# 6. 실제 도로 경로 검색
+# 5. 경로 검색
 # =====================================
 
 if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
@@ -144,7 +108,7 @@ if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
                 end = find_location(end_name)
 
                 if start is None or end is None:
-                    st.error("장소를 찾을 수 없습니다. 장소 이름을 확인해 주세요.")
+                    st.error("장소를 찾을 수 없습니다.")
 
                 else:
                     route = get_route(start, end)
@@ -157,306 +121,547 @@ if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
                         st.session_state.start_name = start_name
                         st.session_state.end_name = end_name
 
-                        st.session_state.progress = 0.0
-                        st.session_state.running = False
-                        st.session_state.last_tick = None
-
-                        st.success("실제 도로 경로 검색이 완료되었습니다!")
+                        st.success("경로 검색 완료!")
 
         except Exception as e:
             st.error(f"경로 검색 오류: {e}")
 
 # =====================================
-# 7. 주행 시스템
+# 6. 주행 지도
 # =====================================
 
 if st.session_state.route:
 
     route = st.session_state.route
+
+    coordinates = route["coordinates"]
     total_distance = route["distance"]
 
     st.divider()
     st.subheader("🎮 자동차 주행 시스템")
 
-    # 속도 설정
-    col1, col2 = st.columns(2)
+    st.info(
+        "지도 안의 주행 버튼과 속도 조절 기능을 이용해 주세요."
+    )
 
-    with col1:
-        speed = st.slider(
-            "🚘 자동차 속도",
-            min_value=0,
-            max_value=200,
-            value=st.session_state.speed,
-            step=5,
-            format="%d km/h"
+    # OSRM 좌표를 위도, 경도 순서로 변경
+    route_points = [
+        [point[1], point[0]]
+        for point in coordinates
+    ]
+
+    # =================================
+    # 7. Folium 지도 생성
+    # =================================
+
+    driving_map = folium.Map(
+        location=route_points[0],
+        zoom_start=13,
+        tiles="OpenStreetMap"
+    )
+
+    # 전체 경로
+    folium.PolyLine(
+        route_points,
+        color="#2678ff",
+        weight=6,
+        opacity=0.85
+    ).add_to(driving_map)
+
+    # 출발지
+    folium.Marker(
+        route_points[0],
+        tooltip="출발지",
+        icon=folium.Icon(
+            color="green",
+            icon="play"
         )
+    ).add_to(driving_map)
 
-    with col2:
-        scale = st.select_slider(
-            "⏩ 게임 시간 배속",
-            options=[1, 5, 10, 30, 60],
-            value=st.session_state.scale,
-            format_func=lambda x: f"{x}배속"
+    # 목적지
+    folium.Marker(
+        route_points[-1],
+        tooltip="목적지",
+        icon=folium.Icon(
+            color="red",
+            icon="flag"
         )
+    ).add_to(driving_map)
 
-    st.session_state.speed = speed
-    st.session_state.scale = scale
+    driving_map.fit_bounds(route_points)
 
-    # =====================================
-    # 8. 주행 버튼
-    # =====================================
+    # =================================
+    # 8. JavaScript 주행 시스템
+    # =================================
 
-    b1, b2, b3 = st.columns(3)
+    route_json = json.dumps(route_points)
 
-    with b1:
-        if st.button("▶ 주행 시작", use_container_width=True):
+    map_name = driving_map.get_name()
 
-            if st.session_state.progress < total_distance:
-                st.session_state.running = True
-                st.session_state.last_tick = time.monotonic()
+    panel_html = """
+    <div id="drive-panel" style="
+        position:fixed;
+        top:12px;
+        left:12px;
+        right:12px;
+        z-index:9999;
+        background:rgba(16,21,29,0.96);
+        color:white;
+        padding:16px;
+        border-radius:14px;
+        border:1px solid #52647c;
+        font-family:Arial,sans-serif;
+        box-shadow:0 3px 15px rgba(0,0,0,0.35);
+    ">
 
-    with b2:
-        if st.button("⏸ 일시정지", use_container_width=True):
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:10px;
+        ">
+            <strong style="font-size:20px;">
+                🚗 DriveMap
+            </strong>
 
-            st.session_state.running = False
-            st.session_state.last_tick = None
+            <span id="drive-status"
+                style="color:#20c997;font-weight:bold;">
+                대기 중
+            </span>
+        </div>
 
-    with b3:
-        if st.button("↻ 처음부터", use_container_width=True):
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(4,1fr);
+            gap:8px;
+            margin-top:14px;
+        ">
 
-            st.session_state.progress = 0.0
-            st.session_state.running = False
-            st.session_state.last_tick = None
+            <div style="background:#263448;padding:10px;border-radius:8px;">
+                <small>전체 거리</small>
+                <div id="total-distance">0 km</div>
+            </div>
 
-    # =====================================
-    # 9. 실시간 주행 화면
-    # =====================================
+            <div style="background:#263448;padding:10px;border-radius:8px;">
+                <small>주행 거리</small>
+                <div id="driven-distance">0 km</div>
+            </div>
 
-    def render_driving_panel():
+            <div style="background:#263448;padding:10px;border-radius:8px;">
+                <small>남은 거리</small>
+                <div id="remaining-distance">0 km</div>
+            </div>
 
-        route = st.session_state.route
-        coordinates = route["coordinates"]
-        total = route["distance"]
+            <div style="background:#263448;padding:10px;border-radius:8px;">
+                <small>예상 시간</small>
+                <div id="eta">-</div>
+            </div>
 
-        # 자동차 이동 계산
-        if st.session_state.running:
+        </div>
 
-            now = time.monotonic()
-            previous = st.session_state.last_tick
+        <div style="margin-top:14px;">
+            <label>자동차 속도</label>
+            <strong id="speed-value"
+                style="float:right;">60 km/h</strong>
 
-            if previous is not None:
+            <input id="speed-control"
+                type="range"
+                min="0"
+                max="200"
+                step="5"
+                value="60"
+                style="width:100%;accent-color:#2678ff;">
+        </div>
 
-                elapsed = min(now - previous, 2.0)
+        <div style="margin-top:10px;">
+            <label>게임 시간 배속</label>
 
-                movement = (
-                    st.session_state.speed / 3.6
-                    * elapsed
-                    * st.session_state.scale
-                )
+            <select id="scale-control"
+                style="
+                    width:100%;
+                    padding:8px;
+                    margin-top:5px;
+                    background:#263448;
+                    color:white;
+                    border:1px solid #52647c;
+                    border-radius:7px;
+                ">
+                <option value="1">1배속</option>
+                <option value="5">5배속</option>
+                <option value="10" selected>10배속</option>
+                <option value="30">30배속</option>
+                <option value="60">60배속</option>
+            </select>
+        </div>
 
-                st.session_state.progress = min(
-                    total,
-                    st.session_state.progress + movement
-                )
+        <div style="
+            display:flex;
+            gap:8px;
+            margin-top:14px;
+        ">
 
-            st.session_state.last_tick = now
+            <button id="start-button" style="
+                flex:1;
+                padding:12px;
+                border:0;
+                border-radius:8px;
+                background:#087f5b;
+                color:white;
+                font-weight:bold;
+                cursor:pointer;
+            ">▶ 시작</button>
 
-        progress = st.session_state.progress
-        remaining = max(0, total - progress)
+            <button id="pause-button" style="
+                flex:1;
+                padding:12px;
+                border:0;
+                border-radius:8px;
+                background:#b7791f;
+                color:white;
+                font-weight:bold;
+                cursor:pointer;
+            ">⏸ 정지</button>
 
-        # 도착 확인
-        if progress >= total:
+            <button id="reset-button" style="
+                flex:1;
+                padding:12px;
+                border:0;
+                border-radius:8px;
+                background:#b83232;
+                color:white;
+                font-weight:bold;
+                cursor:pointer;
+            ">↻ 초기화</button>
 
-            st.session_state.running = False
-            st.session_state.last_tick = None
+        </div>
 
-            st.success("🏁 목적지에 도착했습니다!")
+        <div style="
+            height:7px;
+            background:#34445a;
+            border-radius:10px;
+            margin-top:14px;
+            overflow:hidden;
+        ">
+            <div id="progress-bar" style="
+                height:100%;
+                width:0%;
+                background:#20c997;
+            "></div>
+        </div>
 
-        # =====================================
-        # 예상 남은 시간
-        # =====================================
+    </div>
+    """
 
-        effective_speed = (
-            st.session_state.speed
-            * st.session_state.scale
-        )
+    driving_map.get_root().html.add_child(
+        Element(panel_html)
+    )
 
-        if effective_speed > 0:
+    # =================================
+    # 9. 자동차 애니메이션
+    # =================================
 
-            eta = remaining / (effective_speed / 3.6)
+    javascript = """
+    (function() {
 
-            hours = int(eta // 3600)
-            minutes = int((eta % 3600) // 60)
+        const map = MAP_NAME;
+        const points = ROUTE_POINTS;
+        const totalMeters = TOTAL_DISTANCE;
 
-            eta_text = f"{hours}시간 {minutes}분"
+        let progress = 0;
+        let running = false;
+        let lastTime = null;
+        let animationId = null;
 
-        else:
-            eta_text = "정차 중"
+        const segmentLengths = [];
+        let accumulated = [0];
 
-        # =====================================
-        # 주행 정보
-        # =====================================
+        function distance(a, b) {
+            const R = 6371000;
+            const rad = x => x * Math.PI / 180;
 
-        c1, c2, c3, c4 = st.columns(4)
+            const dLat = rad(b[0] - a[0]);
+            const dLon = rad(b[1] - a[1]);
 
-        c1.metric(
-            "현재 속도",
-            f"{st.session_state.speed} km/h"
-        )
+            const value =
+                Math.sin(dLat / 2) ** 2 +
+                Math.cos(rad(a[0])) *
+                Math.cos(rad(b[0])) *
+                Math.sin(dLon / 2) ** 2;
 
-        c2.metric(
-            "전체 거리",
-            f"{total / 1000:.2f} km"
-        )
+            return 2 * R * Math.asin(Math.sqrt(value));
+        }
 
-        c3.metric(
-            "주행 거리",
-            f"{progress / 1000:.2f} km"
-        )
+        for (let i = 0; i < points.length - 1; i++) {
 
-        c4.metric(
-            "남은 거리",
-            f"{remaining / 1000:.2f} km"
-        )
+            const length = distance(points[i], points[i + 1]);
 
-        st.markdown(
-            f"### ⏱️ 예상 남은 시간: {eta_text}"
-        )
+            segmentLengths.push(length);
 
-        if total > 0:
-            st.progress(
-                min(1.0, progress / total)
-            )
-        else:
-            st.progress(0.0)
+            accumulated.push(
+                accumulated[accumulated.length - 1] + length
+            );
+        }
 
-        # =====================================
-        # 실제 도로 지도
-        # =====================================
+        function getPosition(meters) {
 
-        car_position = get_car_position(
-            coordinates,
-            progress
-        )
+            for (let i = 0; i < segmentLengths.length; i++) {
 
-        full_route = [
-            [p[1], p[0]]
-            for p in coordinates
-        ]
+                if (accumulated[i + 1] >= meters) {
 
-        # 지도 생성
-        driving_map = folium.Map(
-            location=car_position,
-            zoom_start=13,
-            tiles="OpenStreetMap"
-        )
+                    const length = segmentLengths[i];
 
-        # 전체 경로
-        folium.PolyLine(
-            full_route,
-            color="#2678ff",
-            weight=6,
-            opacity=0.85,
-            tooltip="전체 주행 경로"
-        ).add_to(driving_map)
+                    const ratio = length > 0
+                        ? (meters - accumulated[i]) / length
+                        : 0;
 
-        # 지나온 경로
-        passed = get_passed_route(
-            coordinates,
-            progress
-        )
+                    return [
+                        points[i][0] +
+                        (points[i + 1][0] - points[i][0]) * ratio,
 
-        if len(passed) > 1:
+                        points[i][1] +
+                        (points[i + 1][1] - points[i][1]) * ratio
+                    ];
+                }
+            }
 
-            folium.PolyLine(
-                passed,
-                color="#20c997",
-                weight=7,
-                opacity=1,
-                tooltip="주행 완료 구간"
-            ).add_to(driving_map)
+            return points[points.length - 1];
+        }
 
-        # 출발지
-        folium.Marker(
-            full_route[0],
-            tooltip="출발지",
-            icon=folium.Icon(
-                color="green",
-                icon="play"
-            )
-        ).add_to(driving_map)
+        const carIcon = L.divIcon({
+            html: '<div style="font-size:32px;width:40px;height:40px;text-align:center;">🚗</div>',
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
 
-        # 목적지
-        folium.Marker(
-            full_route[-1],
-            tooltip="목적지",
-            icon=folium.Icon(
-                color="red",
-                icon="flag"
-            )
-        ).add_to(driving_map)
+        const car = L.marker(points[0], {
+            icon: carIcon,
+            zIndexOffset: 1000
+        }).addTo(map);
 
-        # 자동차
-        folium.Marker(
-            car_position,
-            tooltip="현재 자동차 위치",
-            icon=folium.DivIcon(
-                html="""
-                <div style="
-                    font-size:30px;
-                    width:40px;
-                    height:40px;
-                    text-align:center;
-                    text-shadow:1px 1px 3px white;
-                ">🚗</div>
-                """,
-                icon_size=(40, 40),
-                icon_anchor=(20, 20)
-            )
-        ).add_to(driving_map)
+        const passedLine = L.polyline([], {
+            color: "#20c997",
+            weight: 7,
+            opacity: 1
+        }).addTo(map);
 
-        # 경로가 모두 보이도록 지도 범위 설정
-        driving_map.fit_bounds(full_route)
+        const speedInput = document.getElementById("speed-control");
+        const scaleInput = document.getElementById("scale-control");
 
-        st.subheader("🗺️ 실제 도로 주행 지도")
+        const status = document.getElementById("drive-status");
 
-        st_folium(
-            driving_map,
-            width=None,
-            height=600,
-            returned_objects=[],
-            key="drivemap_live"
-        )
+        function updateDisplay() {
 
-        st.caption(
-            "지도: OpenStreetMap | 도로 경로: OSRM"
-        )
+            const speed = Number(speedInput.value);
+            const scale = Number(scaleInput.value);
 
-    # =====================================
-    # 10. 지도와 주행 정보 갱신
-    # =====================================
+            const remaining = Math.max(0, totalMeters - progress);
 
-    live_panel = st.fragment(
-        run_every="1s" if st.session_state.running else None
-    )(render_driving_panel)
+            document.getElementById("speed-value").textContent =
+                speed + " km/h";
 
-    live_panel()
+            document.getElementById("total-distance").textContent =
+                (totalMeters / 1000).toFixed(2) + " km";
+
+            document.getElementById("driven-distance").textContent =
+                (progress / 1000).toFixed(2) + " km";
+
+            document.getElementById("remaining-distance").textContent =
+                (remaining / 1000).toFixed(2) + " km";
+
+            const effectiveSpeed = speed * scale;
+
+            if (effectiveSpeed > 0 && running) {
+
+                const seconds = remaining / (effectiveSpeed / 3.6);
+
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+
+                document.getElementById("eta").textContent =
+                    hours + "시간 " + minutes + "분";
+
+            } else if (remaining <= 0) {
+
+                document.getElementById("eta").textContent = "도착";
+
+            } else {
+
+                document.getElementById("eta").textContent = "정지 중";
+            }
+
+            document.getElementById("progress-bar").style.width =
+                (progress / totalMeters * 100) + "%";
+        }
+
+        function updateCar() {
+
+            const position = getPosition(progress);
+
+            car.setLatLng(position);
+
+            const passedPoints = [];
+
+            for (let i = 0; i < points.length; i++) {
+
+                if (accumulated[i] <= progress) {
+                    passedPoints.push(points[i]);
+                }
+            }
+
+            passedPoints.push(position);
+
+            passedLine.setLatLngs(passedPoints);
+
+        }
+
+        function animate(timestamp) {
+
+            if (!running) return;
+
+            if (lastTime === null) {
+                lastTime = timestamp;
+            }
+
+            const elapsed = Math.min(
+                (timestamp - lastTime) / 1000,
+                0.1
+            );
+
+            lastTime = timestamp;
+
+            const speed = Number(speedInput.value);
+            const scale = Number(scaleInput.value);
+
+            progress += speed / 3.6 * scale * elapsed;
+
+            if (progress >= totalMeters) {
+
+                progress = totalMeters;
+                running = false;
+                status.textContent = "🏁 목적지 도착";
+                status.style.color = "#20c997";
+                lastTime = null;
+
+            } else {
+
+                status.textContent = "🚗 주행 중";
+                status.style.color = "#20c997";
+            }
+
+            updateCar();
+            updateDisplay();
+
+            if (running) {
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+
+        function startDrive() {
+
+            if (progress >= totalMeters) {
+                progress = 0;
+                updateCar();
+            }
+
+            if (running) return;
+
+            running = true;
+            lastTime = null;
+
+            status.textContent = "🚗 주행 중";
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function pauseDrive() {
+
+            running = false;
+            lastTime = null;
+
+            if (animationId !== null) {
+                cancelAnimationFrame(animationId);
+            }
+
+            status.textContent = "⏸ 일시정지";
+
+            updateDisplay();
+        }
+
+        function resetDrive() {
+
+            pauseDrive();
+
+            progress = 0;
+
+            updateCar();
+            updateDisplay();
+
+            status.textContent = "대기 중";
+            status.style.color = "#20c997";
+        }
+
+        document.getElementById("start-button")
+            .addEventListener("click", startDrive);
+
+        document.getElementById("pause-button")
+            .addEventListener("click", pauseDrive);
+
+        document.getElementById("reset-button")
+            .addEventListener("click", resetDrive);
+
+        speedInput.addEventListener("input", updateDisplay);
+        scaleInput.addEventListener("change", updateDisplay);
+
+        updateCar();
+        updateDisplay();
+
+    })();
+    """
+
+    javascript = (
+        javascript
+        .replace("MAP_NAME", map_name)
+        .replace("ROUTE_POINTS", route_json)
+        .replace("TOTAL_DISTANCE", str(total_distance))
+    )
+
+    driving_map.get_root().script.add_child(
+        Element(javascript)
+    )
+
+    # =================================
+    # 10. 지도 표시
+    # =================================
+
+    st.subheader("🗺️ 실제 도로 주행 지도")
+
+    map_html = driving_map.get_root().render()
+
+    components.html(
+        map_html,
+        height=850,
+        scrolling=False
+    )
+
+    st.caption(
+        "지도: OpenStreetMap | 도로 경로: OSRM"
+    )
 
 else:
 
     st.info(
-        "출발지와 목적지를 입력한 후 경로 검색을 눌러 주세요."
+        "출발지와 목적지를 입력한 후 실제 도로 경로 검색을 눌러 주세요."
     )
 
     st.markdown("""
-    ### 🚘 DriveMap 기능
+    ### 🚘 DriveMap 주요 기능
 
     - 실제 대한민국 도로 지도
-    - 자동차 아이콘 이동
+    - 자동차 아이콘 실시간 이동
     - 주행 속도 조절
     - 게임 시간 배속
-    - 이동 거리 계산
-    - 남은 거리 표시
+    - 주행 거리 및 남은 거리
     - 예상 도착 시간
     - 주행 시작 및 일시정지
     """)
