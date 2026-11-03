@@ -12,9 +12,9 @@ from map_engine import (
     get_passed_route
 )
 
-# =========================
+# =====================================
 # 1. 기본 설정
-# =========================
+# =====================================
 
 st.set_page_config(
     page_title="DriveMap",
@@ -22,19 +22,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# =========================
+# =====================================
 # 2. 디자인
-# =========================
+# =====================================
 
 st.markdown("""
 <style>
 .stApp {
     background-color: #10151d;
-    color: #ffffff;
+    color: white;
 }
 
 h1, h2, h3, p, label {
-    color: #ffffff !important;
+    color: white !important;
 }
 
 [data-testid="stMetric"] {
@@ -44,42 +44,30 @@ h1, h2, h3, p, label {
     border: 1px solid #34445a;
 }
 
-/* 모든 버튼 기본 디자인 */
+/* 버튼 디자인 */
 div.stButton > button {
     width: 100%;
     min-height: 48px;
-    border-radius: 10px;
-    font-weight: 700;
-    border: 1px solid #52647c;
     background-color: #263448;
-    color: #ffffff !important;
-    transition: 0.2s;
+    color: white !important;
+    border: 1px solid #52647c;
+    border-radius: 10px;
+    font-weight: bold;
 }
 
-/* 버튼에 마우스를 올렸을 때 */
-div.stButton > button:hover {
-    background-color: #3b526f;
-    color: #ffffff !important;
-    border-color: #7daeff;
-}
-
-/* 버튼 글자 */
 div.stButton > button p {
-    color: #ffffff !important;
-}
-
-/* 입력창 */
-div[data-baseweb="input"] {
-    background-color: #202a38;
-}
-
-div[data-baseweb="input"] input {
     color: white !important;
 }
 
-/* 슬라이더 */
-div[data-testid="stSlider"] {
-    color: white;
+div.stButton > button:hover {
+    background-color: #3b526f;
+    border-color: #7daeff;
+    color: white !important;
+}
+
+/* 입력창 */
+div[data-baseweb="input"] input {
+    color: #17202c !important;
 }
 
 /* 구분선 */
@@ -89,9 +77,9 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
+# =====================================
 # 3. 세션 데이터
-# =========================
+# =====================================
 
 defaults = {
     "route": None,
@@ -108,14 +96,18 @@ for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# =========================
-# 4. 메인 화면
-# =========================
+# =====================================
+# 4. 제목
+# =====================================
 
 st.title("🚗 DriveMap")
 st.caption("REAL ROAD DRIVING SIMULATOR")
 
 st.divider()
+
+# =====================================
+# 5. 출발지와 목적지
+# =====================================
 
 st.subheader("📍 출발지와 목적지")
 
@@ -135,9 +127,9 @@ with col2:
         key="end_input"
     )
 
-# =========================
-# 5. 경로 검색
-# =========================
+# =====================================
+# 6. 실제 도로 경로 검색
+# =====================================
 
 if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
 
@@ -152,7 +144,7 @@ if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
                 end = find_location(end_name)
 
                 if start is None or end is None:
-                    st.error("장소를 찾을 수 없습니다.")
+                    st.error("장소를 찾을 수 없습니다. 장소 이름을 확인해 주세요.")
 
                 else:
                     route = get_route(start, end)
@@ -164,18 +156,19 @@ if st.button("🗺️ 실제 도로 경로 검색", use_container_width=True):
                         st.session_state.route = route
                         st.session_state.start_name = start_name
                         st.session_state.end_name = end_name
+
                         st.session_state.progress = 0.0
                         st.session_state.running = False
                         st.session_state.last_tick = None
 
-                        st.success("경로 검색이 완료되었습니다!")
+                        st.success("실제 도로 경로 검색이 완료되었습니다!")
 
         except Exception as e:
             st.error(f"경로 검색 오류: {e}")
 
-# =========================
-# 6. 주행 시스템
-# =========================
+# =====================================
+# 7. 주행 시스템
+# =====================================
 
 if st.session_state.route:
 
@@ -185,6 +178,7 @@ if st.session_state.route:
     st.divider()
     st.subheader("🎮 자동차 주행 시스템")
 
+    # 속도 설정
     col1, col2 = st.columns(2)
 
     with col1:
@@ -208,9 +202,9 @@ if st.session_state.route:
     st.session_state.speed = speed
     st.session_state.scale = scale
 
-    # =========================
-    # 7. 주행 버튼
-    # =========================
+    # =====================================
+    # 8. 주행 버튼
+    # =====================================
 
     b1, b2, b3 = st.columns(3)
 
@@ -223,18 +217,20 @@ if st.session_state.route:
 
     with b2:
         if st.button("⏸ 일시정지", use_container_width=True):
+
             st.session_state.running = False
             st.session_state.last_tick = None
 
     with b3:
         if st.button("↻ 처음부터", use_container_width=True):
+
             st.session_state.progress = 0.0
             st.session_state.running = False
             st.session_state.last_tick = None
 
-    # =========================
-    # 8. 실시간 주행 화면
-    # =========================
+    # =====================================
+    # 9. 실시간 주행 화면
+    # =====================================
 
     def render_driving_panel():
 
@@ -268,7 +264,7 @@ if st.session_state.route:
         progress = st.session_state.progress
         remaining = max(0, total - progress)
 
-        # 목적지 도착 확인
+        # 도착 확인
         if progress >= total:
 
             st.session_state.running = False
@@ -276,15 +272,17 @@ if st.session_state.route:
 
             st.success("🏁 목적지에 도착했습니다!")
 
-            st.rerun(scope="app")
+        # =====================================
+        # 예상 남은 시간
+        # =====================================
 
-        # 예상 시간 계산
         effective_speed = (
             st.session_state.speed
             * st.session_state.scale
         )
 
         if effective_speed > 0:
+
             eta = remaining / (effective_speed / 3.6)
 
             hours = int(eta // 3600)
@@ -295,7 +293,10 @@ if st.session_state.route:
         else:
             eta_text = "정차 중"
 
+        # =====================================
         # 주행 정보
+        # =====================================
+
         c1, c2, c3, c4 = st.columns(4)
 
         c1.metric(
@@ -322,13 +323,16 @@ if st.session_state.route:
             f"### ⏱️ 예상 남은 시간: {eta_text}"
         )
 
-        st.progress(
-            min(1.0, progress / total) if total > 0 else 0.0
-        )
+        if total > 0:
+            st.progress(
+                min(1.0, progress / total)
+            )
+        else:
+            st.progress(0.0)
 
-        # =========================
-        # 9. 실제 도로 지도
-        # =========================
+        # =====================================
+        # 실제 도로 지도
+        # =====================================
 
         car_position = get_car_position(
             coordinates,
@@ -340,20 +344,10 @@ if st.session_state.route:
             for p in coordinates
         ]
 
-        # 지도 중심을 경로 가운데로 고정
-        center_lat = (
-            min(p[0] for p in full_route)
-            + max(p[0] for p in full_route)
-        ) / 2
-
-        center_lon = (
-            min(p[1] for p in full_route)
-            + max(p[1] for p in full_route)
-        ) / 2
-
+        # 지도 생성
         driving_map = folium.Map(
-            location=[center_lat, center_lon],
-            zoom_start=12,
+            location=car_position,
+            zoom_start=13,
             tiles="OpenStreetMap"
         )
 
@@ -362,7 +356,7 @@ if st.session_state.route:
             full_route,
             color="#2678ff",
             weight=6,
-            opacity=0.8,
+            opacity=0.85,
             tooltip="전체 주행 경로"
         ).add_to(driving_map)
 
@@ -378,6 +372,7 @@ if st.session_state.route:
                 passed,
                 color="#20c997",
                 weight=7,
+                opacity=1,
                 tooltip="주행 완료 구간"
             ).add_to(driving_map)
 
@@ -420,6 +415,7 @@ if st.session_state.route:
             )
         ).add_to(driving_map)
 
+        # 경로가 모두 보이도록 지도 범위 설정
         driving_map.fit_bounds(full_route)
 
         st.subheader("🗺️ 실제 도로 주행 지도")
@@ -436,15 +432,15 @@ if st.session_state.route:
             "지도: OpenStreetMap | 도로 경로: OSRM"
         )
 
-    # =========================
-    # 10. 필요한 영역만 자동 갱신
-    # =========================
+    # =====================================
+    # 10. 지도와 주행 정보 갱신
+    # =====================================
 
     live_panel = st.fragment(
         run_every="1s" if st.session_state.running else None
-    )
+    )(render_driving_panel)
 
-    live_panel(render_driving_panel)
+    live_panel()
 
 else:
 
@@ -458,6 +454,7 @@ else:
     - 실제 대한민국 도로 지도
     - 자동차 아이콘 이동
     - 주행 속도 조절
+    - 게임 시간 배속
     - 이동 거리 계산
     - 남은 거리 표시
     - 예상 도착 시간
